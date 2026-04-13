@@ -1,0 +1,26 @@
+{
+	"folders": [
+		{
+			"path": "../../.."
+		},
+		{
+			"path": "../../../../AnimalSpecis"
+		},
+		{
+			"path": "../../../../AdaptiveSequenograms"
+		},
+		{
+			"path": "../../../../BatAnnotation"
+		}
+	],
+	"settings": {
+		"sqltools.connections": [
+			{
+				"previewLimit": 50,
+				"driver": "SQLite",
+				"name": "test",
+				"database": "${workspaceFolder:BatSpecNew}/Source/BatAnnotation/__test__/test.db"
+			}
+		]
+	}
+}

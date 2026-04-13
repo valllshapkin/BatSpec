@@ -1,0 +1,2896 @@
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/__init__.py =====
+import os
+import scipy.signal as sig
+import pyqtgraph as pg
+from pathlib import Path
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, 
+                               QSpinBox, QPushButton, QFormLayout, QSplitter, 
+                               QTextBrowser, QTabWidget, QLabel)
+from PySide6.QtCore import Qt
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from .Record import Record
+from .STFTModel import StftModelTab
+from .Processing import ProcessingTab
+from .SpecView import STFTGraph
+
+class RecordAnalisys(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+
+
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
+        TabInstance.__init__(self, parent, tab_widget)
+
+        self.l = QVBoxLayout(self)
+
+        self.lT = QTabWidget()
+        self.l.addWidget(self.lT)
+
+        self.lTR = Record(self, self.lT)
+        self.lRM = StftModelTab(self, self.lT)
+        self.lProc = ProcessingTab(self, self.lT)  
+        self.stft_graph = STFTGraph(self, self.lT)
+
+
+
+    def onLanguageChange(self):
+        self.setTabName(self.tr("Record Analisys"))
+        self.setTabToolTip(self.tr("..."))
+
+    def onThemeChange(self):
+        pass
+
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__locale__/this_de_DE.ts =====
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="de_DE">
+<context>
+    <name>RawGraph</name>
+    <message>
+        <location filename="../__init__.py" line="52"/>
+        <location filename="../__init__.py" line="120"/>
+        <source>Display:</source>
+        <translation>Anzeige:</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="56"/>
+        <location filename="../__init__.py" line="122"/>
+        <source>Raw (original)</source>
+        <translation>Roh (original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="57"/>
+        <location filename="../__init__.py" line="123"/>
+        <source>Centered (median = 0)</source>
+        <translation>Zentriert (Median = 0)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="78"/>
+        <source>No data</source>
+        <translation>Keine Daten</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="91"/>
+        <source>(original)</source>
+        <translation>(original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="94"/>
+        <source>(DC offset removed)</source>
+        <translation>(Gleichspannungsanteil entfernt)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="116"/>
+        <source>Oscillogram</source>
+        <translation>Oszillogramm</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="126"/>
+        <source>Amplitude</source>
+        <translation>Amplitude</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="127"/>
+        <source>Time</source>
+        <translation>Zeit</translation>
+    </message>
+</context>
+<context>
+    <name>Record</name>
+    <message>
+        <location filename="../__init__.py" line="171"/>
+        <source>Record</source>
+        <translation>Aufnahme</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="172"/>
+        <source>Record management</source>
+        <translation>Aufnahmeverwaltung</translation>
+    </message>
+</context>
+</TS>
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__locale__/this_en_US.ts =====
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="en_US">
+<context>
+    <name>RawGraph</name>
+    <message>
+        <location filename="../__init__.py" line="52"/>
+        <location filename="../__init__.py" line="120"/>
+        <source>Display:</source>
+        <translation>Display:</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="56"/>
+        <location filename="../__init__.py" line="122"/>
+        <source>Raw (original)</source>
+        <translation>Raw (original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="57"/>
+        <location filename="../__init__.py" line="123"/>
+        <source>Centered (median = 0)</source>
+        <translation>Centered (median = 0)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="78"/>
+        <source>No data</source>
+        <translation>No data</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="91"/>
+        <source>(original)</source>
+        <translation>(original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="94"/>
+        <source>(DC offset removed)</source>
+        <translation>(DC offset removed)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="116"/>
+        <source>Oscillogram</source>
+        <translation>Oscillogram</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="126"/>
+        <source>Amplitude</source>
+        <translation>Amplitude</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="127"/>
+        <source>Time</source>
+        <translation>Time</translation>
+    </message>
+</context>
+<context>
+    <name>Record</name>
+    <message>
+        <location filename="../__init__.py" line="171"/>
+        <source>Record</source>
+        <translation>Record</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="172"/>
+        <source>Record management</source>
+        <translation>Record management</translation>
+    </message>
+</context>
+</TS>
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__locale__/this_es_ES.ts =====
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="es_ES">
+<context>
+    <name>RawGraph</name>
+    <message>
+        <location filename="../__init__.py" line="52"/>
+        <location filename="../__init__.py" line="120"/>
+        <source>Display:</source>
+        <translation>Visualización:</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="56"/>
+        <location filename="../__init__.py" line="122"/>
+        <source>Raw (original)</source>
+        <translation>Crudo (original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="57"/>
+        <location filename="../__init__.py" line="123"/>
+        <source>Centered (median = 0)</source>
+        <translation>Centrado (mediana = 0)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="78"/>
+        <source>No data</source>
+        <translation>Sin datos</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="91"/>
+        <source>(original)</source>
+        <translation>(original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="94"/>
+        <source>(DC offset removed)</source>
+        <translation>(desplazamiento de CC eliminado)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="116"/>
+        <source>Oscillogram</source>
+        <translation>Oscilograma</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="126"/>
+        <source>Amplitude</source>
+        <translation>Amplitud</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="127"/>
+        <source>Time</source>
+        <translation>Tiempo</translation>
+    </message>
+</context>
+<context>
+    <name>Record</name>
+    <message>
+        <location filename="../__init__.py" line="171"/>
+        <source>Record</source>
+        <translation>Grabación</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="172"/>
+        <source>Record management</source>
+        <translation>Gestión de grabaciones</translation>
+    </message>
+</context>
+</TS>
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__locale__/this_ru_RU.ts =====
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="ru_RU">
+<context>
+    <name>RawGraph</name>
+    <message>
+        <location filename="../__init__.py" line="52"/>
+        <location filename="../__init__.py" line="120"/>
+        <source>Display:</source>
+        <translation>Отображение:</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="56"/>
+        <location filename="../__init__.py" line="122"/>
+        <source>Raw (original)</source>
+        <translation>Исходный (оригинал)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="57"/>
+        <location filename="../__init__.py" line="123"/>
+        <source>Centered (median = 0)</source>
+        <translation>Центрированный (медиана = 0)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="78"/>
+        <source>No data</source>
+        <translation>Нет данных</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="91"/>
+        <source>(original)</source>
+        <translation>(оригинал)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="94"/>
+        <source>(DC offset removed)</source>
+        <translation>(смещение постоянного тока удалено)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="116"/>
+        <source>Oscillogram</source>
+        <translation>Осциллограмма</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="126"/>
+        <source>Amplitude</source>
+        <translation>Амплитуда</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="127"/>
+        <source>Time</source>
+        <translation>Время</translation>
+    </message>
+</context>
+<context>
+    <name>Record</name>
+    <message>
+        <location filename="../__init__.py" line="171"/>
+        <source>Record</source>
+        <translation>Запись</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="172"/>
+        <source>Record management</source>
+        <translation>Управление записями</translation>
+    </message>
+</context>
+</TS>
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__locale__/this_fr_FR.ts =====
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="fr_FR">
+<context>
+    <name>RawGraph</name>
+    <message>
+        <location filename="../__init__.py" line="52"/>
+        <location filename="../__init__.py" line="120"/>
+        <source>Display:</source>
+        <translation>Affichage :</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="56"/>
+        <location filename="../__init__.py" line="122"/>
+        <source>Raw (original)</source>
+        <translation>Brut (original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="57"/>
+        <location filename="../__init__.py" line="123"/>
+        <source>Centered (median = 0)</source>
+        <translation>Centré (médiane = 0)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="78"/>
+        <source>No data</source>
+        <translation>Aucune donnée</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="91"/>
+        <source>(original)</source>
+        <translation>(original)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="94"/>
+        <source>(DC offset removed)</source>
+        <translation>(décalage CC supprimé)</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="116"/>
+        <source>Oscillogram</source>
+        <translation>Oscillogramme</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="126"/>
+        <source>Amplitude</source>
+        <translation>Amplitude</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="127"/>
+        <source>Time</source>
+        <translation>Temps</translation>
+    </message>
+</context>
+<context>
+    <name>Record</name>
+    <message>
+        <location filename="../__init__.py" line="171"/>
+        <source>Record</source>
+        <translation>Enregistrement</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="172"/>
+        <source>Record management</source>
+        <translation>Gestion des enregistrements</translation>
+    </message>
+</context>
+</TS>
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__locale__/this_zh_CN.ts =====
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="zh_CN">
+<context>
+    <name>RawGraph</name>
+    <message>
+        <location filename="../__init__.py" line="52"/>
+        <location filename="../__init__.py" line="120"/>
+        <source>Display:</source>
+        <translation>显示：</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="56"/>
+        <location filename="../__init__.py" line="122"/>
+        <source>Raw (original)</source>
+        <translation>原始数据</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="57"/>
+        <location filename="../__init__.py" line="123"/>
+        <source>Centered (median = 0)</source>
+        <translation>居中（中位数=0）</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="78"/>
+        <source>No data</source>
+        <translation>无数据</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="91"/>
+        <source>(original)</source>
+        <translation>（原始）</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="94"/>
+        <source>(DC offset removed)</source>
+        <translation>（直流偏移已移除）</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="116"/>
+        <source>Oscillogram</source>
+        <translation>波形图</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="126"/>
+        <source>Amplitude</source>
+        <translation>振幅</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="127"/>
+        <source>Time</source>
+        <translation>时间</translation>
+    </message>
+</context>
+<context>
+    <name>Record</name>
+    <message>
+        <location filename="../__init__.py" line="171"/>
+        <source>Record</source>
+        <translation>记录</translation>
+    </message>
+    <message>
+        <location filename="../__init__.py" line="172"/>
+        <source>Record management</source>
+        <translation>记录管理</translation>
+    </message>
+</context>
+</TS>
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__init__.py =====
+import numpy as np
+import pyqtgraph as pg
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, 
+                               QSplitter, 
+                               QTabWidget, QLabel, QGroupBox)
+from PySide6.QtCore import Qt
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from qt_pg_theme import ThemedPlotWidget
+from qt_themes import get_theme
+
+from .Import import Import
+from .Load import Load
+from .MetaData import MetaData
+from .Logic import RECORD_STATE
+import numpy as np
+import pyqtgraph as pg
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox
+
+from .Logic import RECORD_STATE
+
+# Опционально: включение OpenGL для максимальной скорости (можно закомментировать, если будут баги с видеокартой)
+pg.setConfigOptions(useOpenGL=True, antialias=False)
+
+
+class RawGraph(LocalesTrigger, ThemesTrigger, TranslateComponent, QGroupBox):
+
+    def __init__(self, parent: QWidget | None = None):
+        QGroupBox.__init__(self, parent)
+
+        self.v = QVBoxLayout(self)
+        self.v.setContentsMargins(4, 4, 4, 4)
+
+        # горизонтальный layout внутри v → vh
+        self.vh = QHBoxLayout()
+        self.vh.setContentsMargins(0, 0, 0, 4)
+
+        self.vhL = QLabel(self.tr("Display:"))
+        self.vh.addWidget(self.vhL)
+
+        self.vhC = QComboBox()
+        self.vhC.addItem(self.tr("Raw (original)"), "raw")
+        self.vhC.addItem(self.tr("Centered (median = 0)"), "centered")
+        self.vhC.setCurrentIndex(1)
+        self.vhC.currentIndexChanged.connect(self.updatePlot)
+        self.vh.addWidget(self.vhC)
+
+        self.vh.addStretch()
+        self.v.addLayout(self.vh)
+
+        self.vP = ThemedPlotWidget()
+        self.vP.showGrid(x=True, y=True, alpha=0.3)
+        self.v.addWidget(self.vP)
+
+        self.vPC = self.vP.plot()
+        self.vPC.setDownsampling(ds=True, auto=True, method='peak')
+        self.vPC.setClipToView(True)
+
+        RECORD_STATE.signals.recordChanged.connect(self.onRecordChanged)
+
+    def onRecordChanged(self):
+        if not RECORD_STATE.isAllExist():
+            self.vPC.setData([], [])
+            self.vP.setTitle(self.tr("No data"))
+            return
+
+        self.updatePlot()
+
+    def updatePlot(self):
+        if not RECORD_STATE.isAllExist():
+            return
+
+        mode = self.vhC.currentData()
+
+        if mode == "raw":
+            r = RECORD_STATE.record_raw
+            s = self.tr("(original)")
+        else:
+            r = RECORD_STATE.record_centered
+            s = self.tr("(DC offset removed)")
+
+        if not r:
+            self.vPC.setData([], [])
+            return
+
+        data = r.array
+        fs = r.samplerate
+
+        t = np.arange(len(data), dtype=np.float64) / fs
+
+        self.vPC.setData(x=t, y=data)
+
+        duration = t[-1] if len(t) > 0 else 0
+        self.vP.setXRange(0, duration, padding=0.01)
+
+        ymin = float(data.min())
+        ymax = float(data.max())
+        yrange = ymax - ymin
+        pad = max(0.08, yrange * 0.12)
+        self.vP.setYRange(ymin - pad, ymax + pad)
+
+        self.vP.setTitle(self.tr("Oscillogram") + " " + s)
+        self.vP.update()
+
+    def onLanguageChange(self):
+        self.vhL.setText(self.tr("Display:"))
+
+        self.vhC.setItemText(0, self.tr("Raw (original)"))
+        self.vhC.setItemText(1, self.tr("Centered (median = 0)"))
+
+        pi = self.vP.getPlotItem()
+        pi.setLabel('left',  self.tr("Amplitude"), units='FS')
+        pi.setLabel('bottom', self.tr("Time"),    units='s')
+
+        self.updatePlot()
+
+    def onThemeChange(self):
+        self.vPC.setPen(pg.mkPen(get_theme().primary, width=1))
+
+
+class Record(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
+        TabInstance.__init__(self, parent, tab_widget)
+
+        self.v = QVBoxLayout(self)
+        self.v.setContentsMargins(0, 0, 0, 0)
+
+        # главный вертикальный сплиттер
+        self.vV = QSplitter(Qt.Vertical)
+        self.v.addWidget(self.vV)
+
+        # верхняя горизонтальная часть (вкладки + метаданные)
+        self.vVH = QSplitter(Qt.Horizontal)
+        self.vV.addWidget(self.vVH)
+
+        # вкладки импорта / загрузки
+        self.vVHT = QTabWidget()
+        self.vVH.addWidget(self.vVHT)
+
+        self.vVHTI = Import(tab_widget=self.vVHT)
+
+        self.vVHTL = Load(tab_widget=self.vVHT)
+
+        # блок метаданных справа
+        self.vVHM = MetaData(self)
+        self.vVH.addWidget(self.vVHM)
+
+        self.vVH.setSizes([300, 300])
+
+        # нижняя часть — график
+        self.vVG = RawGraph(self)
+        self.vV.addWidget(self.vVG)
+
+        self.vV.setSizes([400, 600])
+
+    def onLanguageChange(self):
+        self.setTabName(self.tr("Record"))
+        self.setTabToolTip(self.tr("Record management"))
+
+    def onThemeChange(self):
+        pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/Load/__init__.py =====
+from pathlib import Path
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QStackedWidget,
+                               QLabel, QListWidget, QListWidgetItem, QPushButton)
+from PySide6.QtCore import Slot, Qt
+from PySide6.QtGui import QIcon
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from ..Logic import RECORD_STATE
+from BatSpec.Modules.Project.Logic import PROJECT_STATE
+
+
+class Load(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
+        TabInstance.__init__(self, parent, tab_widget)
+        
+        self.v = QVBoxLayout(self)
+        
+        # QStackedWidget для переключения между "Заглушкой" и "Списком"
+        self.vS = QStackedWidget()
+        self.v.addWidget(self.vS)
+        
+        # --- СТРАНИЦА 0: Заглушка ---
+        self.lbl_no_project = QLabel()
+        self.lbl_no_project.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.vS.addWidget(self.lbl_no_project)
+        
+        # --- СТРАНИЦА 1: Рабочая область со списком ---
+        self.page_list = QWidget()
+        self.page_list_layout = QVBoxLayout(self.page_list)
+        self.page_list_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.list_records = QListWidget()
+        self.list_records.itemDoubleClicked.connect(self.on_item_selected)
+        self.page_list_layout.addWidget(self.list_records)
+        
+        self.btn_refresh = QPushButton()
+        self.btn_refresh.clicked.connect(self.refresh_list)
+        self.page_list_layout.addWidget(self.btn_refresh)
+        
+        self.vS.addWidget(self.page_list)
+        
+        # --- ПОДПИСКИ НА СИГНАЛЫ ---
+        PROJECT_STATE.projectNewLoaded.connect(self.update_ui_state)
+        
+        # Инициализация
+        self.update_ui_state()
+
+    @Slot()
+    def update_ui_state(self):
+        """Переключает экраны в зависимости от того, загружен ли проект"""
+        if PROJECT_STATE.currentProject is None:
+            self.vS.setCurrentIndex(0)
+            self.list_records.clear()
+        else:
+            self.vS.setCurrentIndex(1)
+            self.refresh_list()
+
+    @Slot()
+    def refresh_list(self):
+        """Обновляет список записей из папки проекта"""
+        self.list_records.clear()
+        
+        proj = PROJECT_STATE.currentProject
+        if not proj:
+            return
+            
+        records_dir = proj.folder_records
+        
+        # Защита: если папки еще нет, просто выходим
+        if not records_dir.exists():
+            return
+            
+        # Сканируем папку. Ищем структуру: folder_records / {name} / record.wav
+        for item_dir in records_dir.iterdir():
+            if item_dir.is_dir():
+                wav_path = item_dir / "record.wav"
+                
+                if wav_path.exists() and wav_path.is_file():
+                    # Создаем элемент списка. Имя - это название папки {name}
+                    item = QListWidgetItem(item_dir.name)
+                    item.setIcon(QIcon.fromTheme("audio-x-generic"))
+                    
+                    # Сохраняем полный путь к WAV файлу в data (роль 256, как в Import)
+                    item.setData(256, str(wav_path.absolute()))
+                    
+                    self.list_records.addItem(item)
+
+    @Slot(QListWidgetItem)
+    def on_item_selected(self, item: QListWidgetItem):
+        """Слот срабатывает при двойном клике по записи"""
+        path_str = item.data(256)
+        if path_str:
+            wav_path = Path(path_str)
+            if wav_path.exists():
+                RECORD_STATE.import_record(wav_path)
+    
+    def onLanguageChange(self):
+        self.setTabName(self.tr("Load"))
+        self.lbl_no_project.setText(self.tr("Проект не загружен"))
+        self.btn_refresh.setText(self.tr("Обновить список"))
+    
+    def onThemeChange(self):
+        # При смене темы можно перерисовать иконки (если они зависят от темы)
+        pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/MetaData/__init__.py =====
+from PySide6.QtWidgets import QTabWidget, QWidget
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+from .Info import Info
+from .Guano import Guano
+
+
+class MetaData(LocalesTrigger, ThemesTrigger, TranslateComponent, QTabWidget):
+    def __init__(self, parent: QWidget | None = None):
+        QTabWidget.__init__(self, parent)
+        
+        # Создаём вкладки
+        self.info_tab = Info(self, self)
+        self.guano_tab = Guano(self, self)
+    
+    def onLanguageChange(self):
+        pass
+    
+    def onThemeChange(self):
+        pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/MetaData/Guano/__test__/1.py =====
+from guano import GuanoFile
+g = GuanoFile('/MainData/Repo/golonchenroppi/BatSpec/Tests/MYODAS_20230624_005134.wav')
+for key, value in g.items():
+    print ('%s: %s' % (key, value))
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/MetaData/Guano/__init__.py =====
+from pathlib import Path
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTableWidget, 
+                               QTableWidgetItem, QGroupBox, QHeaderView,
+                               QTabWidget)
+from PySide6.QtCore import Slot
+import logging
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from ...Logic import RECORD_STATE
+
+logger = logging.getLogger(__name__)
+
+from guano import GuanoFile
+
+
+
+class Guano(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
+        TabInstance.__init__(self, parent, tab_widget)
+        
+        self.l = QVBoxLayout(self)
+        
+        self.group = QGroupBox()
+        self.layout = QVBoxLayout(self.group)
+        
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        
+        self.layout.addWidget(self.table)
+        self.l.addWidget(self.group)
+        self.l.addStretch()
+        
+        RECORD_STATE.signals.recordChanged.connect(self.update_metadata)
+        
+        self.update_metadata()
+    
+    @Slot()
+    def update_metadata(self):            
+        record = RECORD_STATE.record_raw
+        
+        if not record or not hasattr(record, 'path') or record.path is None:
+            self.table.setRowCount(1)
+            self.table.setItem(0, 0, QTableWidgetItem(self.tr("Info")))
+            self.table.setItem(0, 1, QTableWidgetItem(self.tr("No recording or file path available")))
+            return
+        
+        try:
+            g = GuanoFile(str(record.path))
+            items = list(g.items())
+            
+            if not items:
+                self.table.setRowCount(1)
+                self.table.setItem(0, 0, QTableWidgetItem(self.tr("Info")))
+                self.table.setItem(0, 1, QTableWidgetItem(self.tr("No GUANO metadata found")))
+                return
+            
+            self.table.setRowCount(len(items))
+            
+            for i, (key, value) in enumerate(items):
+                self.table.setItem(i, 0, QTableWidgetItem(str(key)))
+                self.table.setItem(i, 1, QTableWidgetItem(str(value)))
+            
+            self.table.resizeColumnsToContents()
+            self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            
+        except Exception as e:
+            logger.exception("Error reading GUANO metadata")
+            self.table.setRowCount(1)
+            self.table.setItem(0, 0, QTableWidgetItem(self.tr("Error")))
+            self.table.setItem(0, 1, QTableWidgetItem(str(e)))
+    
+    def onLanguageChange(self):
+        self.setTabName(self.tr("GUANO"))
+        self.setTabToolTip(self.tr("GUANO metadata"))
+        
+        self.group.setTitle(self.tr("GUANO Metadata"))
+        self.table.setHorizontalHeaderLabels([self.tr("Key"), self.tr("Value")])
+        
+        self.update_metadata()
+    
+    def onThemeChange(self):
+        pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/MetaData/Info/__init__.py =====
+import os
+import numpy as np
+import scipy.signal as sig
+import pyqtgraph as pg
+from pathlib import Path
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, 
+                               QSpinBox, QPushButton, QFormLayout, QSplitter, 
+                               QTextBrowser, QTabWidget, QLabel, QGroupBox,
+                               QGridLayout)
+from PySide6.QtCore import Qt, Slot
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from ...Logic import RECORD_STATE
+
+
+class Info(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
+        TabInstance.__init__(self, parent, tab_widget)
+        
+        self.l = QVBoxLayout(self)
+        
+        # --- Группа информации ---
+        self.group = QGroupBox()
+        self.layout = QGridLayout(self.group)
+        
+        self.lbl_status_title = QLabel()
+        self.lbl_status = QLabel()
+        
+        self.lbl_samplerate_title = QLabel()
+        self.lbl_samplerate = QLabel()
+        
+        self.lbl_duration_title = QLabel()
+        self.lbl_duration = QLabel()
+        
+        self.lbl_samples_title = QLabel()
+        self.lbl_samples = QLabel()
+        
+        self.lbl_channels_title = QLabel()
+        self.lbl_channels = QLabel()
+        
+        self.lbl_range_title = QLabel()
+        self.lbl_range = QLabel()
+        
+        # Новые аналитические данные
+        self.lbl_energy_title = QLabel()
+        self.lbl_energy = QLabel()
+        
+        self.lbl_median_title = QLabel()
+        self.lbl_median = QLabel()
+        
+        self.lbl_std_title = QLabel()
+        self.lbl_std = QLabel()
+        
+        self.layout.addWidget(self.lbl_status_title, 0, 0)
+        self.layout.addWidget(self.lbl_status, 0, 1)
+        self.layout.addWidget(self.lbl_samplerate_title, 1, 0)
+        self.layout.addWidget(self.lbl_samplerate, 1, 1)
+        self.layout.addWidget(self.lbl_duration_title, 2, 0)
+        self.layout.addWidget(self.lbl_duration, 2, 1)
+        self.layout.addWidget(self.lbl_samples_title, 3, 0)
+        self.layout.addWidget(self.lbl_samples, 3, 1)
+        self.layout.addWidget(self.lbl_channels_title, 4, 0)
+        self.layout.addWidget(self.lbl_channels, 4, 1)
+        self.layout.addWidget(self.lbl_range_title, 5, 0)
+        self.layout.addWidget(self.lbl_range, 5, 1)
+        
+        # Добавляем новые поля в сетку
+        self.layout.addWidget(self.lbl_energy_title, 6, 0)
+        self.layout.addWidget(self.lbl_energy, 6, 1)
+        self.layout.addWidget(self.lbl_median_title, 7, 0)
+        self.layout.addWidget(self.lbl_median, 7, 1)
+        self.layout.addWidget(self.lbl_std_title, 8, 0)
+        self.layout.addWidget(self.lbl_std, 8, 1)
+        
+        self.layout.setColumnStretch(1, 1)
+        self.l.addWidget(self.group)
+        
+        # --- Кнопка выгрузки записи ---
+        self.btn_unload = QPushButton()
+        self.btn_unload.clicked.connect(self.on_unload_clicked)
+        self.l.addWidget(self.btn_unload)
+        
+        self.l.addStretch()
+        
+        RECORD_STATE.signals.recordChanged.connect(self.update_info)
+        
+        self.update_info()
+    
+    @Slot()
+    def update_info(self):
+        """Обновляет информацию при изменении записи"""
+        record = RECORD_STATE.record_raw
+        
+        if record is not None and len(record.array) > 0:
+            data = record.array
+            sr = record.samplerate
+            
+            self.lbl_status.setText(self.tr("Loaded"))
+            self.lbl_samplerate.setText(f"{sr} Hz")
+            self.lbl_duration.setText(f"{record.duration:.2f} {self.tr('sec')}")
+            self.lbl_samples.setText(f"{len(data)}")
+            
+            # Берём оригинальное количество каналов (до сведения в моно)
+            channels = getattr(record, 'original_channels', 1)
+            self.lbl_channels.setText(f"{channels}")
+            
+            self.lbl_range.setText(f"[{data.min():.4f}, {data.max():.4f}]")
+            
+            # --- Расчет аналитики ---
+            # Энергия: Интеграл квадрата сигнала (Сумма(x^2) * dt)
+            energy = np.sum(data**2) / sr
+            median = np.median(data)
+            std = np.std(data)
+            
+            self.lbl_energy.setText(f"{energy:.4f}")
+            self.lbl_median.setText(f"{median:.6f}")
+            self.lbl_std.setText(f"{std:.6f}")
+            
+            self.btn_unload.setEnabled(True)
+        else:
+            self.lbl_status.setText(self.tr("No data"))
+            self.lbl_samplerate.setText("-")
+            self.lbl_duration.setText("-")
+            self.lbl_samples.setText("-")
+            self.lbl_channels.setText("-")
+            self.lbl_range.setText("-")
+            
+            self.lbl_energy.setText("-")
+            self.lbl_median.setText("-")
+            self.lbl_std.setText("-")
+            
+            self.btn_unload.setEnabled(False)
+            
+    @Slot()
+    def on_unload_clicked(self):
+        """Выгружает запись и рассылает сигнал всем вкладкам"""
+        # Если в логике есть специальный метод, лучше использовать его. 
+        # Иначе напрямую очищаем данные:
+        if hasattr(RECORD_STATE, 'unload_record'):
+            RECORD_STATE.unload_record()
+        else:
+            RECORD_STATE.record_raw = None
+            if hasattr(RECORD_STATE, 'record'): 
+                RECORD_STATE.record = None
+            RECORD_STATE.signals.recordChanged.emit()
+    
+    def onLanguageChange(self):
+        self.setTabName(self.tr("Info"))
+        self.setTabToolTip(self.tr("Information about loaded recording"))
+        
+        self.group.setTitle(self.tr("Recording Information"))
+        self.lbl_status_title.setText(self.tr("Status:"))
+        self.lbl_samplerate_title.setText(self.tr("Sample rate:"))
+        self.lbl_duration_title.setText(self.tr("Duration:"))
+        self.lbl_samples_title.setText(self.tr("Samples:"))
+        self.lbl_channels_title.setText(self.tr("Original channels:"))
+        self.lbl_range_title.setText(self.tr("Value range:"))
+        
+        self.lbl_energy_title.setText(self.tr("Energy (∫x² dt):"))
+        self.lbl_median_title.setText(self.tr("Median:"))
+        self.lbl_std_title.setText(self.tr("Standard Deviation:"))
+        
+        self.btn_unload.setText(self.tr("Unload recording"))
+        
+        self.update_info()
+    
+    def onThemeChange(self):
+        # Если необходимо стилизовать кнопку выгрузки (например, в красный цвет)
+        pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__script__/loc.find.sh =====
+ScriptDir="$(cd "$(dirname "$0")" && pwd)"
+ScriptName="$(basename "$0")"
+
+cd "$ScriptDir/.."
+
+mkdir -p __locale__
+
+lupdate __init__.py -ts \
+    __locale__/this_ru_RU.ts \
+    __locale__/this_en_US.ts \
+    __locale__/this_de_DE.ts \
+    __locale__/this_fr_FR.ts \
+    __locale__/this_es_ES.ts \
+    __locale__/this_zh_CN.ts
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/__script__/loc.comp.sh =====
+ScriptDir="$(cd "$(dirname "$0")" && pwd)"
+ScriptName="$(basename "$0")"
+
+cd "$ScriptDir/.."
+
+mkdir -p __assets__/translations
+
+for ts_file in __locale__/this_*.ts; do
+    qm_file="__assets__/translations/$(basename "$ts_file" .ts).qm"
+    echo "Компилируем $ts_file -> $qm_file"
+    lrelease "$ts_file" -qm "$qm_file"
+done
+
+
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/Logic.py =====
+from numpy.typing import NDArray
+import numpy as np
+import soundfile as sf
+from PySide6.QtCore import QObject, Signal
+from pathlib import Path
+import logging
+
+# Настройка логгера для модуля
+logger = logging.getLogger(__name__)
+
+
+class Record:
+    def __init__(self, array: NDArray[np.float64], samplerate: int, path: Path | None = None, 
+                 original_channels: int = 1, original_subtype: str = 'UNKNOWN'):
+        self.array = array
+        self.samplerate = samplerate
+        self.path = path
+        self.original_channels = original_channels
+        self.original_subtype = original_subtype
+
+    @property
+    def duration(self) -> float:
+        """Длительность в секундах"""
+        return len(self.array) / self.samplerate
+
+
+class _RecordState:
+
+    class Signals(QObject):
+        recordChanged = Signal()
+    
+    record_raw: Record | None = None
+    record_centered: Record | None = None
+
+    def __init__(self):
+        self.signals = self.Signals()
+
+    def isAllExist(self) -> bool:
+        if self.record_raw and self.record_centered:
+            return True
+        return False
+
+
+    def import_record(self, path: Path):
+        try:
+            if not path.exists():
+                raise FileNotFoundError(f"Файл не найден: {path}")
+
+            info = sf.info(str(path))
+            subtype = info.subtype
+
+            data, samplerate = sf.read(str(path), dtype='float64', always_2d=False)
+
+            original_channels = 1 if data.ndim == 1 else data.shape[1]
+
+            # В моно
+            if data.ndim == 2 and data.shape[1] > 1:
+                data = np.mean(data, axis=1)
+            elif data.ndim == 2 and data.shape[1] == 1:
+                data = data.flatten()
+
+            # ────────────────────────────────────────────────
+            # Основная запись (как была)
+            self.record_raw = Record(
+                array=data.copy(),   # важно сделать копию!
+                samplerate=samplerate,
+                path=path,
+                original_channels=original_channels,
+                original_subtype=subtype
+            )
+
+            # Вторая запись — с удалённым смещением (медиана ≈ 0)
+            median_offset = np.median(data)
+            data_zero = data - median_offset
+
+            self.record_centered = Record(
+                array=data_zero,
+                samplerate=samplerate,
+                path=path,                      # можно оставить тот же путь
+                original_channels=original_channels,
+                original_subtype=subtype
+            )
+            # ────────────────────────────────────────────────
+
+            logger.info(f"Загружен файл: {path.name}")
+            logger.info(f"  Subtype: {subtype}")
+            logger.info(f"  Частота: {samplerate} Гц")
+            logger.info(f"  Каналов (исх.): {original_channels}")
+            logger.info(f"  Длительность: {self.record_raw.duration:.2f} с")
+
+            logger.info(f"  Оригинал    min / max / median : {data.min():.5f} / {data.max():.5f} / {np.median(data):.5f}")
+            logger.info(f"  Нулевой DC  min / max / median : {data_zero.min():.5f} / {data_zero.max():.5f} / {np.median(data_zero):.5f}")
+
+            if not self.isAllExist(): raise RuntimeError()
+
+        except Exception as e:
+            logger.exception("Ошибка импорта записи")
+            self.record_raw = None
+            self.record_centered = None
+        finally:
+            self.signals.recordChanged.emit()
+
+# Глобальный экземпляр состояния
+RECORD_STATE = _RecordState()
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Record/Import/__init__.py =====
+from pathlib import Path
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, 
+                               QFileDialog, QTabWidget, QListWidget,
+                               QListWidgetItem, QMessageBox)
+from PySide6.QtCore import Slot, Signal, QThread, QSettings
+from PySide6.QtGui import QIcon
+import json
+from typing import List, Optional
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from ..Logic import RECORD_STATE
+
+
+class PathChecker(QThread):
+    """Поток для фоновой проверки актуальности путей"""
+    
+    paths_checked = Signal(dict)  # {path_str: exists}
+    
+    def __init__(self, paths: List[str]):
+        super().__init__()
+        self.paths = paths
+        
+    def run(self):
+        results = {}
+        for path_str in self.paths:
+            results[path_str] = Path(path_str).exists()
+        self.paths_checked.emit(results)
+
+
+class Import(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+    
+    RECENT_FILES_KEY = "recent_records_files"
+    MAX_RECENT_FILES = 10
+    
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
+        TabInstance.__init__(self, parent, tab_widget)
+        
+        self.settings = QSettings("GolonChenroppi", "BatSpec")
+        
+        self.v = QVBoxLayout(self)
+        
+        # Кнопка выбора файла
+        self.vB = QPushButton("Load WAV")          # будет переведено
+        self.vB.clicked.connect(self.on_select_file)
+        self.v.addWidget(self.vB)
+        
+        # Список недавних
+        self.vL = QListWidget()
+        self.vL.setMaximumHeight(200)
+        self.vL.itemDoubleClicked.connect(self.on_recent_file_clicked)
+        self.v.addWidget(self.vL)
+        
+        # Кнопка очистки
+        self.vC = QPushButton("Clear history")     # будет переведено
+        self.vC.clicked.connect(self.clear_recent_files)
+        self.v.addWidget(self.vC)
+        
+        self.v.addStretch()
+        
+        # Загрузка и начальное обновление
+        self.load_recent_files()
+    
+    def add_to_recent(self, file_path: Path):
+        recent = self.get_recent_files()
+        path_str = str(file_path.absolute())
+        
+        if path_str in recent:
+            recent.remove(path_str)
+        
+        recent.insert(0, path_str)
+        recent = recent[:self.MAX_RECENT_FILES]
+        
+        self.save_recent_files(recent)
+        self.update_recent_list()
+    
+    def get_recent_files(self) -> List[str]:
+        raw = self.settings.value(self.RECENT_FILES_KEY, "[]")
+        if isinstance(raw, str):
+            try:
+                lst = json.loads(raw)
+                if isinstance(lst, list):
+                    return lst
+            except:
+                pass
+        # fallback
+        if isinstance(raw, list):
+            return raw
+        if isinstance(raw, str) and raw:
+            return [raw]
+        return []
+
+    def save_recent_files(self, recent: List[str]):
+        self.settings.setValue(self.RECENT_FILES_KEY, json.dumps(recent))
+
+    def update_recent_list(self):
+        self.vL.clear()
+        recent = self.get_recent_files()
+        
+        for path_str in recent:
+            path = Path(path_str)
+            item = QListWidgetItem()
+            
+            if path.exists():
+                item.setIcon(QIcon.fromTheme("audio-x-generic"))
+                item.setText(f"✓ {path.name}\n{path.parent}")
+            else:
+                item.setIcon(QIcon.fromTheme("dialog-warning"))
+                item.setText(f"⚠ {path.name} (missing)\n{path.parent}")
+            
+            item.setData(256, path_str)
+            self.vL.addItem(item)
+    
+    def check_paths_async(self):
+        recent = self.get_recent_files()
+        if recent:
+            self.checker = PathChecker(recent)
+            self.checker.paths_checked.connect(self.on_paths_checked)
+            self.checker.start()
+    
+    @Slot(dict)
+    def on_paths_checked(self, results: dict):
+        self.update_recent_list()
+        
+        missing = [p for p, ex in results.items() if not ex]
+        if missing and len(missing) <= 3:
+            names = [Path(p).name for p in missing]
+            QMessageBox.information(
+                self,
+                self.tr("Information"),
+                self.tr("The following files are no longer available:\n{}").format("\n".join(names))
+            )
+    
+    @Slot()
+    def on_select_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select WAV file"),
+            "",
+            self.tr("WAV files (*.wav)")
+        )
+        
+        if path:
+            file_path = Path(path)
+            RECORD_STATE.import_record(file_path)
+            self.add_to_recent(file_path)
+    
+    @Slot(QListWidgetItem)
+    def on_recent_file_clicked(self, item: QListWidgetItem):
+        path_str = item.data(256)
+        path = Path(path_str)
+        
+        if path.exists():
+            RECORD_STATE.import_record(path)
+            self.add_to_recent(path)
+        else:
+            reply = QMessageBox.question(
+                self,
+                self.tr("File not found"),
+                self.tr("File '{}' not found. Remove from list?").format(path.name),
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                recent = self.get_recent_files()
+                if path_str in recent:
+                    recent.remove(path_str)
+                    self.save_recent_files(recent)
+                    self.update_recent_list()
+    
+    @Slot()
+    def clear_recent_files(self):
+        reply = QMessageBox.question(
+            self,
+            self.tr("Clear history"),
+            self.tr("Are you sure you want to clear recent files history?"),
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.save_recent_files([])
+            self.update_recent_list()
+    
+    def load_recent_files(self):
+        self.update_recent_list()
+        self.check_paths_async()
+    
+    def onLanguageChange(self):
+        self.setTabName(self.tr("Import"))
+        
+        self.vB.setText(self.tr("Load WAV"))
+        self.vC.setText(self.tr("Clear history"))
+        
+        # Переводим сообщения в списке (если нужно)
+        self.update_recent_list()
+    
+    def onThemeChange(self):
+        self.update_recent_list()
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/SpecView/__test__/123.py =====
+import sys
+import numpy as np
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QComboBox, QLabel
+import pyqtgraph as pg
+
+# Глобальная настройка: данные (rows, cols) -> (height, width)
+# Это критически важно, чтобы массив 200000x600 отображался правильно (не повернутым)
+pg.setConfigOption('imageAxisOrder', 'row-major')
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("PySide6 + PyQtGraph Huge Array Fix")
+        self.resize(1200, 800)
+
+        # 1. Генерация массива (200,000 x 600)
+        # Используем float32 для экономии памяти (~480 МБ)
+        print("Генерация данных...")
+        self.data = np.random.normal(size=(200000, 600)).astype(np.float32)
+        
+        # Добавим структуру для проверки разрешения
+        self.data[100000:100050, :] = 5  # Тонкая горизонтальная линия
+        self.data[:, 300:305] = 5        # Тонкая вертикальная линия
+        print("Данные сгенерированы.")
+
+        # Интерфейс
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+
+        # Виджет pyqtgraph
+        self.graphics_view = pg.GraphicsLayoutWidget()
+        layout.addWidget(self.graphics_view)
+
+        self.plot_item = self.graphics_view.addPlot(title="Zoom Test")
+
+        # --- СОЗДАНИЕ ImageItem С ПРАВИЛЬНЫМИ НАСТРОЙКАМИ ---
+        
+        # Создаем элемент. В конструкторе или через setOpts включаем авто-даунсэмплинг.
+        # Это решает проблему "размытия" оси, по которой не приближаем.
+        self.image_item = pg.ImageItem(autoDownsample=True)
+        
+        # Добавляем на график
+        self.plot_item.addItem(self.image_item)
+
+        # Устанавливаем данные
+        self.image_item.setImage(self.data)
+
+        # Настройка интерполяции (nearest убирает размытие)
+        self.image_item.setOpts(interpolation='nearest')
+
+        # Инверсия Y, чтобы ноль был сверху
+        self.plot_item.invertY(True)
+
+        # Настройка колормапа
+        self.image_item.setColorMap('viridis')
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/SpecView/__init__.py =====
+# /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/SpecView/__init__.py
+import logging
+import numpy as np
+import pyqtgraph as pg
+from pyqtgraph import mkPen, mkBrush
+
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtWidgets import (QTabWidget, QVBoxLayout, QWidget, QGridLayout,
+                               QLabel, QHBoxLayout, QComboBox, QCheckBox,
+                               QRadioButton, QButtonGroup)
+
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from MySide6.TabInst import TabInstance
+from MySide6.Image import AdaptiveImageItem
+from BatSpec.Services import TranslateComponent
+
+from ..STFTModel.Logic import STFT_MODEL_STATE
+from ..Processing.Logic import PROCESSING_STATE, ProcessingResult, CallTrace
+
+pg.setConfigOption('imageAxisOrder', 'row-major')
+
+logger = logging.getLogger(__name__)
+
+AXIS_LEFT_WIDTH = 42
+
+_LAYERS = [
+    ("original",       "Original spectrogram"),
+    ("normalized",     "Noise-normalised"),
+    ("laplacian",      "Laplacian"),
+    ("binary",         "Binary (after threshold)"),
+    ("after_erosion",  "After erosion"),
+    ("after_dilation", "After dilation"),
+]
+# ──────────────────────────────────────────────────────────────────────────────
+
+class InteractiveCallItem(pg.ItemGroup):
+    """Encapsulates the rendering and interaction for a single detected call."""
+    def __init__(self, call_idx: int, call: CallTrace, state):
+        super().__init__()
+        self.call_idx = call_idx
+        self.call = call
+        self.state = state
+
+        # Bounding Box (Rectangular crop)
+        self.rect_item = pg.PlotDataItem(pen=mkPen((255, 255, 0, 150), width=1, style=Qt.DashLine))
+        self.rect_item.setParentItem(self)
+
+        # TODO: re-enable when TargetItem API is sorted
+        self.curve_item = None
+        self.pt_items   = []
+
+        self.update_graphics()
+
+    def _create_points(self):
+        pass
+
+    def on_curve_clicked(self, curve):
+        pass
+
+    def on_pt_dragged(self, pt):
+        pass
+
+    def set_active_fitting(self, is_fitting: bool):
+        pass
+
+    def apply_fit_step(self, ctrl_t: np.ndarray, ctrl_f: np.ndarray):
+        pass
+
+    def update_graphics(self, update_points=True):
+        t0, t1, f0, f1 = self.call.t0, self.call.t1, self.call.f0, self.call.f1
+        self.rect_item.setData(x=[t0, t1, t1, t0, t0], y=[f0, f0, f1, f1, f0])
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TimePowerPlot(pg.PlotItem):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setMaximumHeight(80)
+        self.hideAxis('bottom')
+        self.getAxis('left').setWidth(AXIS_LEFT_WIDTH)
+        self.setMouseEnabled(x=True, y=False)
+        self._curve    = self.plot(pen=mkPen('y', width=1))
+        self._thr_line = pg.InfiniteLine(
+            angle=0, pen=mkPen('r', width=1, style=Qt.DashLine))
+        self.addItem(self._thr_line)
+
+    def update_data(self, time_axis, power, duration, threshold):
+        self._curve.setData(x=time_axis, y=power)
+        self._thr_line.setValue(threshold)
+        y_max = float(np.percentile(power, 99)) * 1.3
+        self.setYRange(0, max(y_max, threshold * 1.5), padding=0)
+        self.setLimits(xMin=0, xMax=duration)
+
+class MinimapPlot(pg.PlotItem):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setMaximumHeight(60)
+        self.hideAxis('bottom')
+        ax = self.getAxis('left')
+        ax.setWidth(AXIS_LEFT_WIDTH)
+        ax.setStyle(showValues=False); ax.setTicks([])
+        ax.setPen(pg.mkPen(color='w', width=0))
+        self.setMouseEnabled(x=False, y=False)
+        self.mini_curve = self.plot(
+            pen=mkPen('c', width=1), fillLevel=0, brush=(0, 255, 255, 80))
+        self.region = pg.LinearRegionItem()
+        self.region.setZValue(10)
+        self.addItem(self.region)
+
+    def update_data(self, time_axis, power, duration):
+        self.mini_curve.setData(x=time_axis, y=power)
+        self.setLimits(xMin=0, xMax=duration)
+        self.setXRange(0, duration, padding=0)
+        self.region.setBounds([0, duration])
+        self.region.setRegion([0, duration])
+
+class SpecViewBox(pg.ViewBox):
+    mouseMoved = Signal(float, float)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.roi_mode = 'move'
+        self.current_roi = None
+
+    def set_roi_mode(self, mode):
+        self.roi_mode = mode
+
+    def hoverEvent(self, ev):
+        if not ev.isExit():
+            pos = self.mapSceneToView(ev.scenePos())
+            self.mouseMoved.emit(pos.x(), pos.y())
+
+    def mouseDragEvent(self, ev, axis=None):
+        if self.roi_mode != 'move' and ev.button() == Qt.MouseButton.LeftButton:
+            ev.accept()
+            pos = self.mapToView(ev.pos())
+            sp  = self.mapToView(ev.buttonDownPos())
+            if ev.isStart():
+                if self.roi_mode == 'rect':
+                    self.current_roi = pg.RectROI(sp, [0,0], pen='y', removable=True)
+                    self.current_roi.addScaleHandle([1,1],[0,0])
+                elif self.roi_mode == 'line':
+                    self.current_roi = pg.LineSegmentROI([sp, pos], pen='y', removable=True)
+                self.current_roi.sigRemoveRequested.connect(lambda r: self.removeItem(r))
+                self.addItem(self.current_roi)
+            elif ev.isFinish():
+                self.current_roi = None
+            else:
+                if self.current_roi:
+                    if self.roi_mode == 'rect':
+                        x0,y0,x1,y1 = sp.x(),sp.y(),pos.x(),pos.y()
+                        self.current_roi.setPos([min(x0,x1), min(y0,y1)])
+                        self.current_roi.setSize([abs(x1-x0), abs(y1-y0)])
+                    elif self.roi_mode == 'line':
+                        self.current_roi.movePoint(self.current_roi.getHandles()[1], pos)
+            return
+        super().mouseDragEvent(ev, axis)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+class STFTGraph(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+
+    def __init__(self, parent: QWidget | None = None,
+                 tab_widget: QTabWidget | None = None):
+        TabInstance.__init__(self, parent=parent, tab_widget=tab_widget)
+
+        self._result:        ProcessingResult | None = None
+        self._last_max_freq: float = 1.0
+        self._call_items:    list[InteractiveCallItem] = []
+
+        # --- КЭШИРОВАННЫЕ ДАННЫЕ ДЛЯ МЫШИ (ОПТИМИЗАЦИЯ) ---
+        self._current_arr:      np.ndarray | None = None
+        self._current_arr_mean: float = 0.0
+        self._current_arr_std:  float = 1.0
+        # --------------------------------------------------
+
+        self.v = QVBoxLayout(self)
+
+        # ── Top toolbar ───────────────────────────────────────────────────
+        tb = QHBoxLayout()
+        self.lbl_layer     = QLabel()
+        self.display_combo = QComboBox()
+        for key, label in _LAYERS:
+            self.display_combo.addItem(label, key)
+        self.lbl_cmap  = QLabel()
+        self.cmap_combo = QComboBox()
+        self.cmap_combo.addItems(pg.colormap.listMaps())
+        self.cmap_combo.setCurrentText('viridis')
+        self.lock_y_cb   = QCheckBox(); self.lock_y_cb.setChecked(True)
+        self.show_ovl_cb = QCheckBox(); self.show_ovl_cb.setChecked(True)
+
+        for w in (self.lbl_layer, self.display_combo):        tb.addWidget(w)
+        tb.addSpacing(16)
+        for w in (self.lbl_cmap,  self.cmap_combo):           tb.addWidget(w)
+        tb.addSpacing(16)
+        for w in (self.lock_y_cb, self.show_ovl_cb):          tb.addWidget(w)
+        tb.addStretch()
+        self.v.addLayout(tb)
+
+        # ── Plots ─────────────────────────────────────────────────────────
+        self.grid = QGridLayout()
+        self.v.addLayout(self.grid, stretch=1)
+        self.glw  = pg.GraphicsLayoutWidget()
+        self.grid.addWidget(self.glw, 0, 0)
+
+        self.p_power = TimePowerPlot()
+        self.glw.addItem(self.p_power, row=0, col=0)
+
+        self.vb_spec = SpecViewBox()
+        self.p_spec  = self.glw.addPlot(row=1, col=0, viewBox=self.vb_spec)
+        self.p_spec.getAxis('left').setWidth(AXIS_LEFT_WIDTH)
+        self.image_item = AdaptiveImageItem()
+        self.image_item.attachTo(self.p_spec)
+        self.p_spec.addItem(self.image_item)
+        self.p_power.setXLink(self.p_spec)
+
+        self.p_mini = MinimapPlot()
+        self.glw.addItem(self.p_mini, row=2, col=0)
+
+        # ── Overlay ───────────────────────────────────────────────────────
+        self.overlay_widget = QWidget()
+        from PySide6.QtWidgets import QVBoxLayout as _VL
+        _ol = _VL(self.overlay_widget)
+        self.lbl_loading = QLabel()
+        self.lbl_loading.setAlignment(Qt.AlignCenter)
+        self.lbl_loading.setStyleSheet(
+            "background-color:rgba(0,0,0,180);color:white;"
+            "font-size:22px;border-radius:10px;")
+        _ol.addWidget(self.lbl_loading, alignment=Qt.AlignCenter)
+        self.grid.addWidget(self.overlay_widget, 0, 0)
+        self.overlay_widget.hide()
+
+        # ── Bottom toolbar ────────────────────────────────────────────────
+        btb = QHBoxLayout()
+        self.roi_group = QButtonGroup(self)
+        self.btn_move = QRadioButton(); self.btn_move.setChecked(True)
+        self.btn_rect = QRadioButton()
+        self.btn_line = QRadioButton()
+        self.roi_group.addButton(self.btn_move, 1)
+        self.roi_group.addButton(self.btn_rect, 2)
+        self.roi_group.addButton(self.btn_line, 3)
+        self.lbl_call_count = QLabel()
+        for btn in (self.btn_move, self.btn_rect, self.btn_line): btb.addWidget(btn)
+        btb.addStretch(); btb.addWidget(self.lbl_call_count)
+        self.v.addLayout(btb)
+
+        # ── Pixel info ────────────────────────────────────────────────────
+        self.lbl_pixel = QLabel("t=—  f=—  val=—")
+        self.lbl_pixel.setStyleSheet(
+            "font-family: monospace; padding: 2px 6px;"
+            "background: rgba(0,0,0,120); color: #00ff99;")
+        self.v.addWidget(self.lbl_pixel)
+
+        # ── Connections ───────────────────────────────────────────────────
+        self.display_combo.currentIndexChanged.connect(self._on_layer_changed)
+        self.cmap_combo.currentTextChanged.connect(self._on_cmap_changed)
+        self.lock_y_cb.stateChanged.connect(self._on_lock_y_changed)
+        self.show_ovl_cb.stateChanged.connect(self._on_show_overlay_changed)
+        self.roi_group.idToggled.connect(self._on_roi_tool_changed)
+        self.vb_spec.mouseMoved.connect(self._on_mouse_moved)
+
+        STFT_MODEL_STATE.calculationStarted.connect(self._on_stft_started)
+        PROCESSING_STATE.processingStarted.connect(self._on_processing_started)
+        PROCESSING_STATE.processingFinished.connect(self._on_calc_finished)
+        
+        self._updating_region = False
+        self.p_mini.region.sigRegionChanged.connect(self._sync_main_from_mini)
+        self.p_spec.sigRangeChanged.connect(self._sync_mini_from_main)
+
+        self._apply_colormap('viridis')
+
+    # ── Call overlay ──────────────────────────────────────────────────────
+
+    def _clear_call_items(self):
+        for item in self._call_items:
+            self.p_spec.removeItem(item)
+        self._call_items.clear()
+
+    def _draw_calls(self, calls: list[CallTrace]):
+        self._clear_call_items()
+        visible = self.show_ovl_cb.isChecked()
+
+        for idx, call in enumerate(calls):
+            group_item = InteractiveCallItem(idx, call, PROCESSING_STATE)
+            group_item.setVisible(visible)
+            self.p_spec.addItem(group_item)
+            self._call_items.append(group_item)
+
+        n = len(calls)
+        self.lbl_call_count.setText(self.tr("Calls: {n}").format(n=n))
+
+    # ── Layer display ─────────────────────────────────────────────────────
+
+    def _show_current_layer(self):
+        if self._result is None: 
+            self._current_arr = None
+            return
+            
+        key = self.display_combo.currentData()
+        arr = getattr(self._result, key, None)
+        if arr is None or not isinstance(arr, np.ndarray): 
+            self._current_arr = None
+            return
+
+        # Обновляем кэш при смене активного слоя, чтобы не считать это по 60 раз в секунду
+        self._current_arr = arr
+        self._current_arr_mean = float(np.mean(arr))
+        self._current_arr_std  = float(np.std(arr))
+
+        self.image_item._levels = (float(arr.min()), float(arr.max()))
+        self.image_item.setFullData(
+            arr     = arr,
+            x_range = (0.0, self._result.duration),
+            y_range = (0.0, self._result.max_freq),
+        )
+
+    # ── Slots ─────────────────────────────────────────────────────────────
+
+    @Slot(int)
+    def _on_layer_changed(self, _): self._show_current_layer()
+
+    @Slot(str)
+    def _on_cmap_changed(self, name):
+        self._apply_colormap(name); self.image_item._doUpdate()
+
+    @Slot(int)
+    def _on_lock_y_changed(self, state):
+        locked = (state == Qt.CheckState.Checked.value)
+        self.p_spec.setMouseEnabled(x=True, y=not locked)
+        if locked: self.p_spec.setYRange(0, self._last_max_freq, padding=0)
+
+    @Slot(int)
+    def _on_show_overlay_changed(self, state):
+        visible = (state == Qt.CheckState.Checked.value)
+        for item in self._call_items:
+            item.setVisible(visible)
+
+    @Slot(int, bool)
+    def _on_roi_tool_changed(self, btn_id, checked):
+        if checked:
+            self.vb_spec.set_roi_mode({1:'move',2:'rect',3:'line'}.get(btn_id,'move'))
+
+    def _sync_main_from_mini(self):
+        if self._updating_region: return
+        self._updating_region = True
+        self.p_spec.setXRange(*self.p_mini.region.getRegion(), padding=0)
+        self._updating_region = False
+
+    def _sync_mini_from_main(self):
+        if self._updating_region: return
+        self._updating_region = True
+        self.p_mini.region.setRegion(self.p_spec.viewRange()[0])
+        self._updating_region = False
+
+    @Slot()
+    def _on_stft_started(self):
+        self._current_arr = None
+        self.image_item.setVisible(False)
+        self.lbl_loading.setText(self.tr("⏳ Computing STFT…"))
+        self.overlay_widget.show()
+
+    @Slot()
+    def _on_processing_started(self):
+        self._current_arr = None
+        self.image_item.setVisible(False)
+        self._clear_call_items()
+        self.lbl_loading.setText(self.tr("🔍 Detecting calls…"))
+        self.overlay_widget.show()
+
+    @Slot(object)
+    def _on_calc_finished(self, result: ProcessingResult):
+        self.overlay_widget.hide()
+        self.image_item.setVisible(True)
+
+        self._result = result
+        self._last_max_freq = result.max_freq
+
+        self.p_spec.setLimits(xMin=0, xMax=result.duration,
+                              yMin=0, yMax=result.max_freq)
+        self.p_spec.setXRange(0, result.duration, padding=0)
+        self.p_spec.setYRange(0, result.max_freq,  padding=0)
+        self._on_lock_y_changed(self.lock_y_cb.checkState().value)
+
+        self._show_current_layer()
+        self._draw_calls(result.calls)
+
+        time_axis = np.linspace(0, result.duration, len(result.time_power))
+        self.p_power.update_data(
+            time_axis, result.time_power, result.duration,
+            PROCESSING_STATE.time_thresh)
+        self.p_mini.update_data(time_axis, result.time_power, result.duration)
+    
+    @Slot(float, float)
+    def _on_mouse_moved(self, t: float, f: float):
+        # Оптимизированный трекинг без getattr() и np.mean() / np.std()
+        arr = self._current_arr
+        
+        if arr is None or self._result is None or arr.ndim != 2:
+            self.lbl_pixel.setText(f"t={t:.4f}s  f={f:.1f}Hz  val=—")
+            return
+            
+        dur  = self._result.duration
+        fmax = self._result.max_freq
+        
+        # Защита от деления на 0
+        if dur <= 0 or fmax <= 0:
+            return
+            
+        # Проверка, находится ли мышь строго в пределах графика,
+        # иначе не рисуем ничего для пустот вокруг него
+        if not (0 <= t <= dur) or not (0 <= f <= fmax):
+            self.lbl_pixel.setText(f"t={t:.4f}s  f={f:.1f}Hz  val=—")
+            return
+
+        F, T = arr.shape
+        ti   = int(t / dur * T)
+        fi   = int(f / fmax * F)
+        
+        # Страховка индексов на 1 пиксель
+        ti   = max(0, min(T - 1, ti))
+        fi   = max(0, min(F - 1, fi))
+        
+        val  = arr[fi, ti]
+        
+        # Достаем заранее вычисленные значения
+        std  = self._current_arr_std
+        mean = self._current_arr_mean
+        
+        vs   = f"{val/std:.2f}×" if std > 1e-9 else "—"
+        
+        self.lbl_pixel.setText(
+            f"t={t:.4f}s  f={f:.1f}Hz  "
+            f"val={val:.4f}  mean={mean:.3f}  std={std:.3f}  val/std={vs}"
+        )
+
+    # ── Internals ─────────────────────────────────────────────────────────
+
+    def _apply_colormap(self, name):
+        try:    cmap = pg.colormap.get(name)
+        except: cmap = pg.colormap.get('viridis')
+        self.image_item.setColorMap(cmap)
+
+    # ── Locale / Theme ────────────────────────────────────────────────────
+
+    def onLanguageChange(self):
+        self.setTabName(self.tr("STFT Spectrogram"))
+        self.lbl_layer.setText(self.tr("Layer:"))
+        self.lbl_cmap.setText(self.tr("Palette:"))
+        self.lock_y_cb.setText(self.tr("Lock Y"))
+        self.show_ovl_cb.setText(self.tr("Show overlay"))
+
+        current_key = self.display_combo.currentData()
+        labels = {
+            "original":       self.tr("Original spectrogram"),
+            "normalized":     self.tr("Noise-normalised"),
+            "laplacian":      self.tr("Laplacian"),
+            "binary":         self.tr("Binary (after threshold)"),
+            "after_erosion":  self.tr("After erosion"),
+            "after_dilation": self.tr("After dilation"),
+        }
+        self.display_combo.blockSignals(True)
+        for i, (key, _) in enumerate(_LAYERS):
+            self.display_combo.setItemText(i, labels.get(key, key))
+        idx = self.display_combo.findData(current_key)
+        if idx >= 0: self.display_combo.setCurrentIndex(idx)
+        self.display_combo.blockSignals(False)
+
+        self.p_spec.setLabel('left',    self.tr("Frequency"), units='Hz')
+        self.p_spec.setLabel('bottom',  self.tr("Time"),      units='s')
+        self.p_power.setLabel('left',   self.tr("mean power"))
+        self.lbl_loading.setText(self.tr("⏳ Loading…"))
+        self.btn_move.setText(self.tr("🖐 Navigate"))
+        self.btn_rect.setText(self.tr("⬛ Rectangle ROI"))
+        self.btn_line.setText(self.tr("📏 Line ROI"))
+
+    def onThemeChange(self): pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/STFTModel/Logic.py =====
+from typing import Tuple
+import tensorflow as tf
+import numpy as np
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+
+from ..Record.Logic import RECORD_STATE
+
+def make_spec(
+    signal: np.ndarray, 
+    window_array: np.ndarray, 
+    frame_step: int, 
+    fft_length: int,      
+    sample_rate: int,
+    device: str
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+    frame_length = len(window_array)
+
+    def win_func(length, dtype=tf.float32):
+        assert length == frame_length
+        return tf.convert_to_tensor(window_array, dtype=dtype)
+
+    with tf.device(device):
+        stft = tf.signal.stft(
+            signal,
+            frame_length=frame_length,
+            frame_step=frame_step,
+            fft_length=fft_length,    
+            window_fn=win_func 
+        )
+        spectrogram = np.abs(stft.numpy())
+
+    freq_axis = np.fft.rfftfreq(fft_length, d=1.0/sample_rate)
+    num_frames = stft.shape[0]
+    time_axis = (np.arange(num_frames) * frame_step) / sample_rate
+
+    # Считаем RMS (Корень из интеграла мощности по частоте для каждого временного фрейма)
+    rms = np.sqrt(np.sum(spectrogram**2, axis=1))
+
+    return spectrogram, time_axis, freq_axis, rms
+
+
+# --- Воркер теперь передает 4 параметра (добавлен массив RMS) ---
+class STFTWorkerSignals(QObject):
+    finished = Signal(object, float, float, object) # db_matrix, duration, max_freq, rms_array
+    error = Signal(str)
+
+class STFTDataWorker(QRunnable):
+    def __init__(self, state_instance):
+        super().__init__()
+        self.state = state_instance
+        self.signals = STFTWorkerSignals()
+
+    def run(self):
+        try:
+            spectrogram, time_axis, freq_axis, rms = self.state.makeSpec()
+            db = 20.0 * np.log10(spectrogram + 1e-10)
+            db_t = np.ascontiguousarray(db.T, dtype=np.float32)
+            duration = float(time_axis[-1]) if len(time_axis) > 0 else 0.0
+            max_freq = float(freq_axis[-1]) if len(freq_axis) > 0 else 0.0
+            
+            self.signals.finished.emit(db_t, duration, max_freq, rms)
+        except Exception as e:
+            self.signals.error.emit(str(e))
+
+
+class _StftModleState(QObject):
+    calculationStarted = Signal()
+    calculationFinished = Signal(object, float, float, object) # Добавлен object (rms)
+    calculationError = Signal(str)
+    
+    parametersChanged = Signal()
+    dirtyStateChanged = Signal(bool)
+
+    def __init__(self):
+        super().__init__()
+        self.frame_step: int = 256
+        self.fft_length: int = 1024  
+        self.window: np.ndarray | None = None
+        self.window_name: str = "Не выбрано"
+        
+        devices = tf.config.list_logical_devices()
+        self.available_devices = [d.name for d in devices]
+        self.tf_device: str = self.available_devices[0] if self.available_devices else '/device:CPU:0'
+
+        self.is_dirty: bool = False
+        self.threadpool = QThreadPool.globalInstance()
+
+    def set_parameters(self, window_array: np.ndarray, window_name: str, frame_step: int, fft_length: int, tf_device: str):
+        self.window = window_array
+        self.window_name = window_name
+        self.frame_step = frame_step
+        self.fft_length = fft_length
+        self.tf_device = tf_device
+        
+        self.is_dirty = True
+        self.dirtyStateChanged.emit(self.is_dirty)
+        self.parametersChanged.emit()
+
+    def start_calculation(self):
+        if self.window is None or not RECORD_STATE.record_centered:
+            self.calculationError.emit("Нет данных для генерации спектрограммы.")
+            return
+
+        self.calculationStarted.emit()
+        worker = STFTDataWorker(self)
+        worker.signals.finished.connect(self._on_worker_finished)
+        worker.signals.error.connect(self.calculationError.emit)
+        self.threadpool.start(worker)
+
+    def _on_worker_finished(self, db_t, duration, max_freq, rms):
+        self.is_dirty = False
+        self.dirtyStateChanged.emit(self.is_dirty)
+        self.calculationFinished.emit(db_t, duration, max_freq, rms)
+
+    def makeSpec(self):
+        return make_spec(
+            RECORD_STATE.record_centered.array, 
+            self.window, 
+            self.frame_step,
+            self.fft_length,
+            RECORD_STATE.record_centered.samplerate,
+            self.tf_device
+        )
+
+STFT_MODEL_STATE = _StftModleState()
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/STFTModel/__test__/1.py =====
+import matplotlib.pyplot as plt
+import scipy.signal
+
+from typing import Tuple
+import tensorflow as tf
+import numpy as np
+
+def make_spec(
+    signal: np.ndarray, 
+    window_array: np.ndarray, 
+    frame_step: int, 
+    sample_rate: int  # Добавлен параметр для расчета времени и частоты
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+
+    frame_length = len(window_array)
+
+    def win_func(length, dtype=tf.float32):
+        assert length == frame_length
+        return tf.convert_to_tensor(window_array, dtype=dtype)
+
+    # 1. Вычисляем STFT
+    stft = tf.signal.stft(
+        signal,
+        frame_length=frame_length,
+        frame_step=frame_step,
+        window_fn=win_func 
+    )
+
+    # 2. Конвертация в numpy и получение амплитудной спектрограммы (Magnitude)
+    # stft возвращает комплексные числа. Берем модуль (abs), чтобы получить амплитуду.
+    # Транспонируем (.T), чтобы получить форму [частоты, время] — это стандарт для отрисовки.
+    spectrogram = np.abs(stft.numpy()).T 
+
+    # 3. Генерация оси частот (Y-axis) в Герцах
+    # По умолчанию TF использует fft_length равный ближайшей степени 2 >= frame_length
+    fft_length = 2 ** int(np.ceil(np.log2(frame_length)))
+    
+    # np.fft.rfftfreq идеально подходит, так как генерирует частоты для 
+    # уникальных бинов (от 0 до Найквиста), что совпадает с выводом TF
+    freq_axis = np.fft.rfftfreq(fft_length, d=1.0/sample_rate)
+
+    # 4. Генерация оси времени (X-axis) в Секундах
+    # stft.shape[0] - количество получившихся фреймов (окон)
+    num_frames = stft.shape[0]
+    
+    # Время начала каждого фрейма
+    time_axis = (np.arange(num_frames) * frame_step) / sample_rate
+
+    return spectrogram, time_axis, freq_axis
+
+# Создадим тестовый сигнал: 1 секунда, 16000 Гц (синус 1000 Гц + шум)
+sr = 16000
+t = np.linspace(0, 1, sr, endpoint=False)
+test_signal = np.sin(2 * np.pi * 1000 * t) + np.random.normal(0, 0.5, sr)
+
+# Окно Ханна длиной 512 (32 мс) и шаг 256 (16 мс)
+win_length = 512
+step = 256
+window = scipy.signal.windows.hann(win_length)
+
+# Получаем спектрограмму и оси
+spec, t_axis, f_axis = make_spec(test_signal, window, step, sr)
+
+# Переводим в децибелы (логарифмический масштаб) для лучшей видимости
+spec_db = 20 * np.log10(np.maximum(spec, 1e-10))
+
+# Отрисовка
+plt.figure(figsize=(10, 4))
+plt.pcolormesh(t_axis, f_axis, spec_db, shading='gouraud', cmap='magma')
+plt.title('Spectrogram')
+plt.ylabel('Frequency [Hz]')
+plt.xlabel('Time [sec]')
+plt.colorbar(format='%+2.0f dB')
+plt.tight_layout()
+plt.show()
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/STFTModel/__init__.py =====
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QPushButton,
+                               QLabel, QSpinBox, QFormLayout, QGroupBox,
+                               QFileDialog, QComboBox, QMessageBox, QHBoxLayout, QTextEdit)
+from PySide6.QtCore import Qt, Slot
+from pathlib import Path
+import numpy as np
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+import qt_themes
+
+from .Logic import STFT_MODEL_STATE
+from ..Record.Logic import RECORD_STATE
+from ...WindowLab.Logic import WINDOWLAB_STATE
+from ...Project.Logic import PROJECT_STATE
+
+
+class StftModelTab(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+
+    def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None):
+        TabInstance.__init__(self, parent=parent, tab_widget=tab_widget)
+
+        self.v = QVBoxLayout(self)
+
+        self.lbl_no_record = QLabel(self.tr("Запись не выбрана. Загрузите WAV файл."))
+        self.lbl_no_record.setAlignment(Qt.AlignCenter)
+        self.v.addWidget(self.lbl_no_record)
+
+        self.controls_widget = QWidget()
+        self.controls_layout = QVBoxLayout(self.controls_widget)
+        self.controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.v.addWidget(self.controls_widget)
+
+        # Группа Окна
+        self.grp_window = QGroupBox(self.tr("Окно (Window)"))
+        self.l_window = QVBoxLayout(self.grp_window)
+
+        self.lbl_current_window = QLabel(self.tr("Текущее окно: Не выбрано"))
+        self.l_window.addWidget(self.lbl_current_window)
+
+        btn_layout = QHBoxLayout()
+        self.btn_from_lab = QPushButton(self.tr("Из Window Lab"))
+        self.btn_from_project = QPushButton(self.tr("Из Проекта"))
+        self.btn_import = QPushButton(self.tr("Импорт .npy"))
+
+        btn_layout.addWidget(self.btn_from_lab)
+        btn_layout.addWidget(self.btn_from_project)
+        btn_layout.addWidget(self.btn_import)
+        self.l_window.addLayout(btn_layout)
+
+        self.controls_layout.addWidget(self.grp_window)
+
+        # Группа STFT параметров
+        self.grp_params = QGroupBox(self.tr("Параметры STFT"))
+        self.form_params = QFormLayout(self.grp_params)
+
+        self.spin_step = QSpinBox()
+        self.spin_step.setRange(1, 100000)
+        self.spin_step.setValue(64)
+
+        self.combo_fft = QComboBox()
+        self.combo_fft.addItems(["128", "256", "512", "1024", "2048", "4096", "8192", "16384"])
+        self.combo_fft.setCurrentText("1024")
+
+        self.combo_device = QComboBox()
+        self.combo_device.addItems(STFT_MODEL_STATE.available_devices)
+
+        self.lbl_win_ms = QLabel("- ms")
+        self.lbl_step_ms = QLabel("- ms")
+        self.lbl_hz_bin = QLabel("- Hz/bin")
+
+        self.form_params.addRow(self.tr("Шаг окна (frame_step):"), self.spin_step)
+        self.form_params.addRow(self.tr("Размер FFT (fft_length):"), self.combo_fft)
+        self.form_params.addRow(self.tr("Устройство (TF Device):"), self.combo_device)
+        self.form_params.addRow(self.tr("Длина окна (В сек):"), self.lbl_win_ms)
+        self.form_params.addRow(self.tr("Шаг окна (В сек):"), self.lbl_step_ms)
+        self.form_params.addRow(self.tr("Разрешение по оси Y:"), self.lbl_hz_bin)
+
+        self.controls_layout.addWidget(self.grp_params)
+
+        # Кнопка генерации
+        self.btn_generate = QPushButton(self.tr("ПОСЧИТАТЬ СПЕКТРОГРАММУ"))
+        self.btn_generate.setMinimumHeight(50)
+        self.controls_layout.addWidget(self.btn_generate)
+
+        # --- ЛОГ СООБЩЕНИЙ (всегда видим, занимает всё оставшееся место) ---
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        # Убираем ограничение высоты и делаем видимым постоянно
+        # self.log_output.setMaximumHeight(60)   # <-- удалено
+        self.log_output.setVisible(True)          # всегда видим
+        # Политика расширения по умолчанию (Expanding, Expanding) подходит
+        self.controls_layout.addWidget(self.log_output)
+
+        # Убираем stretch, так как лог должен занять всё свободное место
+        # self.controls_layout.addStretch()       # <-- удалено
+
+        # --- СИГНАЛЫ ---
+        RECORD_STATE.signals.recordChanged.connect(self.check_record_state)
+
+        self.spin_step.valueChanged.connect(self.update_parameters)
+        self.combo_fft.currentIndexChanged.connect(self.update_parameters)
+        self.combo_device.currentIndexChanged.connect(self.update_parameters)
+
+        self.btn_from_lab.clicked.connect(self.load_from_lab)
+        self.btn_from_project.clicked.connect(self.load_from_project)
+        self.btn_import.clicked.connect(self.load_from_import)
+
+        self.btn_generate.clicked.connect(self.start_generation)
+
+        # Сигналы от слоя логики
+        STFT_MODEL_STATE.parametersChanged.connect(self.update_info_labels)
+        STFT_MODEL_STATE.dirtyStateChanged.connect(self.handle_dirty_state)
+        STFT_MODEL_STATE.calculationStarted.connect(self.on_calc_started)
+        STFT_MODEL_STATE.calculationFinished.connect(self.on_calc_finished)
+        STFT_MODEL_STATE.calculationError.connect(self.on_calc_error)
+
+        self.check_record_state()
+
+    @Slot()
+    def check_record_state(self):
+        has_record = RECORD_STATE.record_raw is not None
+        self.lbl_no_record.setVisible(not has_record)
+        self.controls_widget.setEnabled(has_record)
+        self.update_info_labels()
+
+    @Slot()
+    def update_parameters(self):
+        if STFT_MODEL_STATE.window is not None:
+            w_len = len(STFT_MODEL_STATE.window)
+            fft_len = int(self.combo_fft.currentText())
+
+            if fft_len < w_len:
+                next_pow2 = 2 ** int(np.ceil(np.log2(w_len)))
+                self.combo_fft.blockSignals(True)
+                if self.combo_fft.findText(str(next_pow2)) == -1:
+                    self.combo_fft.addItem(str(next_pow2))
+                self.combo_fft.setCurrentText(str(next_pow2))
+                self.combo_fft.blockSignals(False)
+                fft_len = next_pow2
+
+            STFT_MODEL_STATE.set_parameters(
+                STFT_MODEL_STATE.window,
+                STFT_MODEL_STATE.window_name,
+                self.spin_step.value(),
+                fft_len,
+                self.combo_device.currentText()
+            )
+
+    @Slot()
+    def update_info_labels(self):
+        if not RECORD_STATE.record_raw:
+            return
+        sr = RECORD_STATE.record_raw.samplerate
+        step = self.spin_step.value()
+        w_len = len(STFT_MODEL_STATE.window) if STFT_MODEL_STATE.window is not None else 0
+        fft_len = STFT_MODEL_STATE.fft_length
+
+        self.lbl_step_ms.setText(f"{(step / sr) * 1000:.3f} ms")
+        self.lbl_win_ms.setText(f"{(w_len / sr) * 1000:.3f} ms")
+        self.lbl_hz_bin.setText(f"{sr / fft_len:.2f} Hz / пиксель")
+        self.lbl_current_window.setText(self.tr(f"Текущее окно: {STFT_MODEL_STATE.window_name} ({w_len} points)"))
+
+        self.btn_generate.setEnabled(STFT_MODEL_STATE.window is not None)
+
+    @Slot(bool)
+    def handle_dirty_state(self, is_dirty: bool):
+        if is_dirty:
+            self.btn_generate.setText(self.tr("ПЕРЕСЧИТАТЬ (Данные изменены)"))
+        else:
+            self.btn_generate.setText(self.tr("ПОСЧИТАТЬ СПЕКТРОГРАММУ"))
+
+    @Slot()
+    def on_calc_started(self):
+        self.btn_generate.setEnabled(False)
+        self.btn_generate.setText(self.tr("Идёт расчёт..."))
+        # Не скрываем лог, можно добавить сообщение о начале
+        self.log_output.append(self.tr("Начало расчёта..."))
+
+    @Slot()
+    def on_calc_finished(self):
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText(self.tr("ПОСЧИТАТЬ СПЕКТРОГРАММУ"))
+        self.log_output.append(self.tr("Расчёт завершён."))
+
+    @Slot(str)
+    def on_calc_error(self, err_msg: str):
+        self.btn_generate.setEnabled(True)
+        self.btn_generate.setText(self.tr("ОШИБКА РАСЧЁТА"))
+        self.log_output.append(self.tr(f"Ошибка TensorFlow/STFT:\n{err_msg}"))
+        # Лог всегда видим, ничего менять не нужно
+
+    @Slot()
+    def load_from_lab(self):
+        window = WINDOWLAB_STATE.currentWindow
+        if window is None:
+            QMessageBox.warning(self, self.tr("Ошибка"), self.tr("В Window Lab не выбрано активное окно."))
+            return
+        STFT_MODEL_STATE.set_parameters(
+            window.array,
+            f"Lab: {window.name}",
+            self.spin_step.value(),
+            int(self.combo_fft.currentText()),
+            self.combo_device.currentText()
+        )
+        self.update_parameters()
+        self.log_output.append(self.tr(f"Загружено окно из Lab: {window.name}"))
+
+    @Slot()
+    def load_from_project(self):
+        names = WINDOWLAB_STATE.windowLoaderSaver.get_all_names()
+        if not names:
+            QMessageBox.information(self, self.tr("Пусто"), self.tr("В проекте нет сохраненных окон."))
+            return
+        name = names[0]
+        window = WINDOWLAB_STATE.windowLoaderSaver.load_window(name)
+        STFT_MODEL_STATE.set_parameters(
+            window.array,
+            f"Project: {window.name}",
+            self.spin_step.value(),
+            int(self.combo_fft.currentText()),
+            self.combo_device.currentText()
+        )
+        self.update_parameters()
+        self.log_output.append(self.tr(f"Загружено окно из проекта: {window.name}"))
+
+    @Slot()
+    def load_from_import(self):
+        path, _ = QFileDialog.getOpenFileName(self, self.tr("Импорт окна"), "", "Numpy Arrays (*.npy)")
+        if path:
+            window = WINDOWLAB_STATE.windowImporterExporter.import_window(Path(path))
+            STFT_MODEL_STATE.set_parameters(
+                window.array,
+                f"File: {window.name}",
+                self.spin_step.value(),
+                int(self.combo_fft.currentText()),
+                self.combo_device.currentText()
+            )
+            self.update_parameters()
+            self.log_output.append(self.tr(f"Импортировано окно из файла: {window.name}"))
+
+    @Slot()
+    def start_generation(self):
+        STFT_MODEL_STATE.start_calculation()
+
+    def onLanguageChange(self):
+        self.setTabName(self.tr("STFT Model"))
+
+    def onThemeChange(self):
+        theme = qt_themes.get_theme()
+        self.lbl_no_record.setStyleSheet(f"color: {theme.red.name()}; font-weight: bold;")
+        self.log_output.setStyleSheet(f"color: {theme.red.name()}")
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Processing/__init__.py =====
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget,
+                               QDoubleSpinBox, QSpinBox, QFormLayout,
+                               QGroupBox, QLabel, QPushButton, QTextEdit)
+from PySide6.QtCore import Qt, Slot
+
+from MySide6.TabInst import TabInstance
+from MySide6.Locales import LocalesTrigger
+from MySide6.Themes import ThemesTrigger
+from BatSpec.Services import TranslateComponent
+
+from .Logic import PROCESSING_STATE
+from ..Record.Logic import RECORD_STATE
+
+
+class ProcessingTab(LocalesTrigger, ThemesTrigger, TranslateComponent, TabInstance):
+    def __init__(self, parent: QWidget | None = None,
+                 tab_widget: QTabWidget | None = None):
+        TabInstance.__init__(self, parent=parent, tab_widget=tab_widget)
+
+        self.v = QVBoxLayout(self)
+        self.v.setAlignment(Qt.AlignTop)
+
+        # ── 1. Normalisation ──────────────────────────────────────────────
+        self.grp_norm = QGroupBox()
+        self.form_norm = QFormLayout(self.grp_norm)
+        self.lbl_pct  = QLabel()
+        self.spin_pct = QDoubleSpinBox()
+        self.spin_pct.setRange(0.1, 50.0)
+        self.spin_pct.setSingleStep(1.0)
+        self.spin_pct.setValue(PROCESSING_STATE.percentile)
+        self.spin_pct.setSuffix(" %")
+        self.form_norm.addRow(self.lbl_pct, self.spin_pct)
+        self.v.addWidget(self.grp_norm)
+
+        # ── 2. Laplacian ──────────────────────────────────────────────────
+        self.grp_lap = QGroupBox()
+        self.form_lap = QFormLayout(self.grp_lap)
+        self.lbl_lap_smooth = QLabel()
+        self.spin_lap_smooth = QDoubleSpinBox()
+        self.spin_lap_smooth.setRange(0.0, 10.0)
+        self.spin_lap_smooth.setSingleStep(0.25)
+        self.spin_lap_smooth.setDecimals(2)
+        self.spin_lap_smooth.setValue(PROCESSING_STATE.lap_pre_smooth)
+        self.form_lap.addRow(self.lbl_lap_smooth, self.spin_lap_smooth)
+        self.v.addWidget(self.grp_lap)
+
+        # ── 3. Morphological pipeline ─────────────────────────────────────
+        self.grp_morpho = QGroupBox()
+        self.form_morpho = QFormLayout(self.grp_morpho)
+
+        self.lbl_morpho_thr = QLabel()
+        self.spin_morpho_thr = QDoubleSpinBox()
+        self.spin_morpho_thr.setRange(0.01, 20.0)
+        self.spin_morpho_thr.setSingleStep(0.1)
+        self.spin_morpho_thr.setDecimals(2)
+        self.spin_morpho_thr.setValue(PROCESSING_STATE.morpho_threshold_std)
+
+        self.lbl_morpho_er = QLabel()
+        self.spin_morpho_er = QSpinBox()
+        self.spin_morpho_er.setRange(1, 30)
+        self.spin_morpho_er.setValue(PROCESSING_STATE.morpho_erosion_radius)
+
+        self.lbl_morpho_dil = QLabel()
+        self.spin_morpho_dil = QSpinBox()
+        self.spin_morpho_dil.setRange(1, 30)
+        self.spin_morpho_dil.setValue(PROCESSING_STATE.morpho_dilation_radius)
+
+        self.form_morpho.addRow(self.lbl_morpho_thr, self.spin_morpho_thr)
+        self.form_morpho.addRow(self.lbl_morpho_er,  self.spin_morpho_er)
+        self.form_morpho.addRow(self.lbl_morpho_dil, self.spin_morpho_dil)
+        self.v.addWidget(self.grp_morpho)
+
+        # ── 4. Ridge detection ────────────────────────────────────────────
+        self.grp_ridge = QGroupBox()
+        self.form_ridge = QFormLayout(self.grp_ridge)
+
+        def _ds(lo, hi, step, val, suffix=""):
+            w = QDoubleSpinBox()
+            w.setRange(lo, hi); w.setSingleStep(step)
+            w.setDecimals(2);   w.setValue(val)
+            if suffix: w.setSuffix(suffix)
+            return w
+
+        self.lbl_thresh  = QLabel()
+        self.spin_thresh = _ds(0.5, 50.0, 0.25, PROCESSING_STATE.time_thresh, " ×")
+        self.lbl_sigma   = QLabel()
+        self.spin_sigma  = _ds(0.1, 20.0, 0.5,  PROCESSING_STATE.gauss_sigma_ms, " ms")
+        self.lbl_window  = QLabel()
+        self.spin_window = _ds(0.1, 50.0, 1.0,  PROCESSING_STATE.gauss_window_ms, " ms")
+        self.lbl_gap     = QLabel()
+        self.spin_gap    = _ds(0.0, 50.0, 0.5,  PROCESSING_STATE.merge_gap_ms, " ms")
+        self.lbl_mindur  = QLabel()
+        self.spin_mindur = _ds(0.1, 50.0, 0.5,  PROCESSING_STATE.min_dur_ms, " ms")
+
+        for lbl, spin in [(self.lbl_thresh,  self.spin_thresh),
+                          (self.lbl_sigma,   self.spin_sigma),
+                          (self.lbl_window,  self.spin_window),
+                          (self.lbl_gap,     self.spin_gap),
+                          (self.lbl_mindur,  self.spin_mindur)]:
+            self.form_ridge.addRow(lbl, spin)
+        self.v.addWidget(self.grp_ridge)
+
+        # ── Apply + log ───────────────────────────────────────────────────
+        self.btn_apply = QPushButton()
+        self.btn_apply.setMinimumHeight(40)
+        self.v.addWidget(self.btn_apply)
+
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setMaximumHeight(120)
+        self.v.addWidget(self.log_output)
+
+        self.v.addStretch()
+
+        # ── Connections ───────────────────────────────────────────────────
+        for w in (self.spin_pct, self.spin_lap_smooth, self.spin_morpho_thr,
+                  self.spin_thresh, self.spin_sigma, self.spin_window,
+                  self.spin_gap, self.spin_mindur):
+            w.valueChanged.connect(self._on_ui_changed)
+
+        for w in (self.spin_morpho_er, self.spin_morpho_dil):
+            w.valueChanged.connect(self._on_ui_changed)
+
+        self.btn_apply.clicked.connect(PROCESSING_STATE.apply_detect)
+
+        RECORD_STATE.signals.recordChanged.connect(self._check_record_state)
+        PROCESSING_STATE.dirtyStateChanged.connect(self._update_apply_btn)
+        PROCESSING_STATE.processingStarted.connect(self._on_started)
+        PROCESSING_STATE.processingFinished.connect(self._on_finished)
+        PROCESSING_STATE.processingError.connect(self._append_log)
+
+        self._check_record_state()
+        self._update_apply_btn(PROCESSING_STATE.is_dirty)
+
+    @Slot()
+    def _check_record_state(self):
+        self.setEnabled(RECORD_STATE.isAllExist())
+
+    @Slot()
+    def _on_ui_changed(self):
+        self.spin_window.setMinimum(self.spin_sigma.value())
+        PROCESSING_STATE.set_detect_parameters(
+            percentile      = self.spin_pct.value(),
+            time_thresh     = self.spin_thresh.value(),
+            gauss_sigma_ms  = self.spin_sigma.value(),
+            gauss_window_ms = self.spin_window.value(),
+            merge_gap_ms    = self.spin_gap.value(),
+            min_dur_ms      = self.spin_mindur.value(),
+        )
+        PROCESSING_STATE.set_laplacian_parameters(
+            pre_smooth = self.spin_lap_smooth.value(),
+        )
+        PROCESSING_STATE.set_morpho_parameters(
+            threshold_std   = self.spin_morpho_thr.value(),
+            erosion_radius  = self.spin_morpho_er.value(),
+            dilation_radius = self.spin_morpho_dil.value(),
+        )
+
+    @Slot(bool)
+    def _update_apply_btn(self, is_dirty: bool):
+        if is_dirty:
+            self.btn_apply.setText(self.tr("Apply (changed)"))
+            self.btn_apply.setStyleSheet("background-color: orange;")
+        else:
+            self.btn_apply.setText(self.tr("Run Detection"))
+            self.btn_apply.setStyleSheet("")
+
+    @Slot(str)
+    def _append_log(self, msg: str):
+        self.log_output.append(msg)
+        self.log_output.verticalScrollBar().setValue(
+            self.log_output.verticalScrollBar().maximum())
+
+    @Slot()
+    def _on_started(self):
+        self.btn_apply.setEnabled(False)
+        self.log_output.clear()
+        self._append_log(self.tr("Processing started…"))
+
+    @Slot(object)
+    def _on_finished(self, result):
+        self.btn_apply.setEnabled(True)
+        n = len(result.calls)
+        self._append_log(self.tr("Finished — {n} call(s) detected.").format(n=n))
+
+    def onLanguageChange(self):
+        self.setTabName(self.tr("Processing"))
+
+        self.grp_norm.setTitle(self.tr("1. Noise Normalisation"))
+        self.lbl_pct.setText(self.tr("Noise percentile:"))
+
+        self.grp_lap.setTitle(self.tr("2. Laplacian"))
+        self.lbl_lap_smooth.setText(self.tr("Pre-smooth σ:"))
+
+        self.grp_morpho.setTitle(self.tr("3. Morphological Pipeline"))
+        self.lbl_morpho_thr.setText(self.tr("Threshold (×std):"))
+        self.lbl_morpho_er.setText(self.tr("Erosion radius (px):"))
+        self.lbl_morpho_dil.setText(self.tr("Dilation radius (px):"))
+
+        self.grp_ridge.setTitle(self.tr("4. Ridge Detection"))
+        self.lbl_thresh.setText(self.tr("Power threshold:"))
+        self.lbl_sigma.setText(self.tr("Gauss sigma:"))
+        self.lbl_window.setText(self.tr("Gauss window:"))
+        self.lbl_gap.setText(self.tr("Merge gap:"))
+        self.lbl_mindur.setText(self.tr("Min duration:"))
+
+        self._update_apply_btn(PROCESSING_STATE.is_dirty)
+
+    def onThemeChange(self):
+        pass
+===== /MainData/Repo/golonchenroppi/BatSpec/Source/BatSpec/Modules/RecordAnalysis/Processing/Logic.py =====
+from __future__ import annotations
+
+import numpy as np
+from dataclasses import dataclass, field
+from scipy.ndimage import (gaussian_filter1d, label, binary_closing,
+                           laplace, gaussian_filter, binary_opening,
+                           binary_dilation, binary_erosion)
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+import logging
+
+from ..STFTModel.Logic import STFT_MODEL_STATE
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CallTrace:
+    ctrl_t: np.ndarray
+    ctrl_f: np.ndarray
+    t0: float = 0.0
+    t1: float = 0.0
+    f0: float = 0.0
+    f1: float = 0.0
+
+
+@dataclass
+class ProcessingResult:
+    original:      np.ndarray
+    normalized:    np.ndarray
+    time_power:    np.ndarray
+    duration:      float = 0.0
+    max_freq:      float = 0.0
+    calls:         list[CallTrace] = field(default_factory=list)
+    rms:           np.ndarray = field(default_factory=lambda: np.array([]))
+    laplacian:     np.ndarray = field(default_factory=lambda: np.array([]))
+    binary:        np.ndarray = field(default_factory=lambda: np.array([]))
+    after_erosion: np.ndarray = field(default_factory=lambda: np.array([]))
+    after_dilation:np.ndarray = field(default_factory=lambda: np.array([]))
+
+
+# ---------------------------------------------------------------------------
+# Normalisation
+# ---------------------------------------------------------------------------
+
+def normalize_globally(db_matrix: np.ndarray, rms: np.ndarray,
+                       percentile: float) -> np.ndarray:
+    noise_threshold = np.percentile(rms, percentile)
+    noise_idx = np.where(rms <= noise_threshold)[0]
+    if len(noise_idx) < 2:
+        logger.warning("Too few noise frames — skipping global normalisation.")
+        return db_matrix.copy()
+    noise_frames = db_matrix[:, noise_idx]
+    mean = np.mean(noise_frames, axis=1)
+    std  = np.std(noise_frames, axis=1)
+    std[std < 1e-6] = 1.0
+    return (db_matrix - mean[:, np.newaxis]) / std[:, np.newaxis]
+
+
+# ---------------------------------------------------------------------------
+# Laplacian
+# ---------------------------------------------------------------------------
+
+def compute_laplacian(norm: np.ndarray, pre_smooth: float = 1.0) -> np.ndarray:
+    if pre_smooth > 0:
+        smoothed = gaussian_filter(norm.astype(np.float64), sigma=pre_smooth)
+    else:
+        smoothed = norm.astype(np.float64)
+    lap = laplace(smoothed).astype(np.float32)
+    np.nan_to_num(lap, copy=False)
+    return lap
+
+
+# ---------------------------------------------------------------------------
+# Morphological pipeline  (3 binary maps)
+# ---------------------------------------------------------------------------
+
+def _disk_struct(radius: int) -> np.ndarray:
+    r = max(1, radius)
+    y, x = np.ogrid[-r:r+1, -r:r+1]
+    return (x**2 + y**2 <= r**2)
+
+
+def morpho_pipeline(
+    lap:            np.ndarray,
+    threshold_std:  float = 1.0,
+    erosion_radius: int   = 2,
+    dilation_radius:int   = 3,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Три бинарные карты:
+    1. binary        — после порога: |lap| > threshold_std * std
+    2. after_erosion — после эрозии: убиваем мелкий лес
+    3. after_dilation— после нарощения: восстанавливаем форму выбоин
+
+    Возвращает три uint8 массива (0/1).
+    """
+    src = np.abs(lap).astype(np.float32)
+
+    # 1. Бинаризация
+    thr    = threshold_std * src.std()
+    binary = (src > thr).astype(np.uint8)
+
+    # 2. Эрозия — убиваем всё мелкое (лес)
+    struct_e  = _disk_struct(erosion_radius)
+    eroded    = binary_erosion(binary, structure=struct_e).astype(np.uint8)
+
+    # 3. Нарощение — возвращаем форму тому что выжило
+    struct_d  = _disk_struct(dilation_radius)
+    dilated   = binary_dilation(eroded, structure=struct_d).astype(np.uint8)
+
+    return binary, eroded, dilated
+
+
+# ---------------------------------------------------------------------------
+# Ridge detection
+# ---------------------------------------------------------------------------
+
+def extract_calls(
+    normalized:       np.ndarray,
+    duration:         float,
+    max_freq:         float,
+    time_thresh:      float,
+    gauss_sigma_ms:   float,
+    gauss_window_ms:  float,
+    merge_gap_ms:     float,
+    min_dur_ms:       float,
+) -> tuple[np.ndarray, list[CallTrace]]:
+    F, T = normalized.shape
+    sec_per_bin = duration / T if T > 0 else 1.0
+    hz_per_bin  = max_freq  / F if F > 0 else 1.0
+
+    raw_power  = np.mean(normalized ** 2, axis=0)
+    sigma_bins = max((gauss_sigma_ms  / 1000.0) / sec_per_bin, 0.5)
+    trunc      = max((gauss_window_ms / 1000.0) / sec_per_bin / 2.0 / sigma_bins, 1.0)
+    smoothed   = gaussian_filter1d(raw_power, sigma=sigma_bins, truncate=trunc)
+
+    mask         = smoothed > time_thresh
+    gap_bins     = max(1, int(round((merge_gap_ms / 1000.0) / sec_per_bin)))
+    min_dur_bins = max(1, int(round((min_dur_ms   / 1000.0) / sec_per_bin)))
+    mask         = binary_closing(mask, structure=np.ones(gap_bins, dtype=bool))
+    labeled, n_segs = label(mask)
+
+    calls: list[CallTrace] = []
+    for seg_id in range(1, n_segs + 1):
+        cols = np.where(labeled == seg_id)[0]
+        if len(cols) < min_dur_bins:
+            continue
+        ridge_f_bins = np.argmax(normalized[:, cols], axis=0)
+        t0 = float(cols[0]  * sec_per_bin)
+        t1 = float(cols[-1] * sec_per_bin)
+        f0 = float(ridge_f_bins.min() * hz_per_bin)
+        f1 = float(ridge_f_bins.max() * hz_per_bin)
+        calls.append(CallTrace(
+            ctrl_t=cols * sec_per_bin,
+            ctrl_f=ridge_f_bins * hz_per_bin,
+            t0=t0, t1=t1, f0=f0, f1=f1,
+        ))
+
+    return smoothed, calls
+
+
+# ---------------------------------------------------------------------------
+# Worker
+# ---------------------------------------------------------------------------
+
+class _DetectSignals(QObject):
+    finished = Signal(object)
+    error    = Signal(str)
+
+
+class DetectWorker(QRunnable):
+    def __init__(self, state: _ProcessingState):
+        super().__init__()
+        self.state   = state
+        self.signals = _DetectSignals(parent=state)
+
+    def run(self):
+        try:
+            raw_db   = self.state.raw_db
+            original = np.ascontiguousarray(raw_db, dtype=np.float32)
+            np.nan_to_num(original, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+            # 1. Нормализация на шум
+            norm = normalize_globally(original, self.state.raw_rms,
+                                      self.state.percentile)
+            norm = np.ascontiguousarray(norm, dtype=np.float32)
+            np.nan_to_num(norm, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+
+            # 2. Лапласиан
+            lap = compute_laplacian(norm, pre_smooth=self.state.lap_pre_smooth)
+
+            # 3. Морфологический пайплайн — три бинарные карты
+            binary, after_erosion, after_dilation = morpho_pipeline(
+                lap,
+                threshold_std   = self.state.morpho_threshold_std,
+                erosion_radius  = self.state.morpho_erosion_radius,
+                dilation_radius = self.state.morpho_dilation_radius,
+            )
+
+            # 4. Ridge detection на нормализованной спектрограмме
+            smoothed, calls = extract_calls(
+                normalized      = norm,
+                duration        = self.state.raw_duration,
+                max_freq        = self.state.raw_max_freq,
+                time_thresh     = self.state.time_thresh,
+                gauss_sigma_ms  = self.state.gauss_sigma_ms,
+                gauss_window_ms = self.state.gauss_window_ms,
+                merge_gap_ms    = self.state.merge_gap_ms,
+                min_dur_ms      = self.state.min_dur_ms,
+            )
+
+            self.signals.finished.emit(ProcessingResult(
+                original       = original,
+                normalized     = norm,
+                time_power     = smoothed,
+                duration       = self.state.raw_duration,
+                max_freq       = self.state.raw_max_freq,
+                calls          = calls,
+                rms            = self.state.raw_rms,
+                laplacian      = lap,
+                binary         = binary,
+                after_erosion  = after_erosion,
+                after_dilation = after_dilation,
+            ))
+        except Exception:
+            logger.exception("DetectWorker error")
+            import traceback
+            self.signals.error.emit(traceback.format_exc())
+
+
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
+
+class _ProcessingState(QObject):
+    processingStarted  = Signal()
+    processingFinished = Signal(object)
+    processingError    = Signal(str)
+    dirtyStateChanged  = Signal(bool)
+
+    def __init__(self):
+        super().__init__()
+
+        self.percentile:      float = 5.0
+        self.lap_pre_smooth:  float = 1.0
+
+        self.morpho_threshold_std:   float = 1.0
+        self.morpho_erosion_radius:  int   = 2
+        self.morpho_dilation_radius: int   = 3
+
+        self.time_thresh:     float = 3.0
+        self.gauss_sigma_ms:  float = 4.0
+        self.gauss_window_ms: float = 8.0
+        self.merge_gap_ms:    float = 2.0
+        self.min_dur_ms:      float = 2.0
+
+        self.raw_db:       np.ndarray | None = None
+        self.raw_rms:      np.ndarray | None = None
+        self.raw_duration: float             = 0.0
+        self.raw_max_freq: float             = 0.0
+
+        self.result:   ProcessingResult | None = None
+        self.is_dirty: bool = True
+
+        self.threadpool = QThreadPool()
+        STFT_MODEL_STATE.calculationFinished.connect(self._on_stft_finished)
+
+    def set_detect_parameters(self, *, percentile: float, time_thresh: float,
+                              gauss_sigma_ms: float, gauss_window_ms: float,
+                              merge_gap_ms: float, min_dur_ms: float) -> None:
+        self.percentile      = percentile
+        self.time_thresh     = max(1.0, time_thresh)
+        self.gauss_sigma_ms  = max(0.1, gauss_sigma_ms)
+        self.gauss_window_ms = max(gauss_sigma_ms, gauss_window_ms)
+        self.merge_gap_ms    = max(0.0, merge_gap_ms)
+        self.min_dur_ms      = max(0.1, min_dur_ms)
+        self.is_dirty = True
+        self.dirtyStateChanged.emit(True)
+
+    def set_laplacian_parameters(self, *, pre_smooth: float) -> None:
+        self.lap_pre_smooth = max(0.0, pre_smooth)
+        self.is_dirty = True
+        self.dirtyStateChanged.emit(True)
+
+    def set_morpho_parameters(self, *, threshold_std: float,
+                              erosion_radius: int,
+                              dilation_radius: int) -> None:
+        self.morpho_threshold_std   = max(0.1, threshold_std)
+        self.morpho_erosion_radius  = max(1, erosion_radius)
+        self.morpho_dilation_radius = max(1, dilation_radius)
+        self.is_dirty = True
+        self.dirtyStateChanged.emit(True)
+
+    def apply_detect(self) -> None:
+        if self.raw_db is not None:
+            self._run_detect()
+
+    def _on_stft_finished(self, db_t, duration, max_freq, rms):
+        self.raw_db       = db_t
+        self.raw_duration = duration
+        self.raw_max_freq = max_freq
+        self.raw_rms      = rms
+        self.is_dirty = False
+        self.dirtyStateChanged.emit(False)
+        self._run_detect()
+
+    def _run_detect(self) -> None:
+        self.processingStarted.emit()
+        worker = DetectWorker(self)
+        worker.signals.finished.connect(self._on_detect_done)
+        worker.signals.error.connect(self.processingError.emit)
+        self.threadpool.start(worker)
+
+    def _on_detect_done(self, result: ProcessingResult) -> None:
+        self.result = result
+        self.is_dirty = False
+        self.dirtyStateChanged.emit(False)
+        self.processingFinished.emit(result)
+
+
+PROCESSING_STATE = _ProcessingState()

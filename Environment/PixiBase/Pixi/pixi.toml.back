@@ -1,0 +1,41 @@
+[workspace]
+name = "BatSpec"
+version = "0.1.0"
+description = "Pixi BatSpec Environment"
+authors = ["Golon Chenroppi <golonchenroppi@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+# Говорим Pixi, что у нас современный Linux (разрешает установку свежих пакетов)
+[system-requirements]
+libc = "2.34"
+
+[dependencies]
+python = "*"
+cuda-version = "*" 
+cuda-cudart = "*"
+pytorch = "*"
+tensorflow = "*"
+cupy = "*"
+scipy = "*"
+pip = "*"
+freeglut = "*"
+# Используем matplotlib-base вместо matplotlib!
+# Это не даст Conda установить лишний PyQt и сломать ваш PySide6.
+matplotlib-base = "*" 
+pyopengl = "*"
+pywavelets = "*"
+scikit-learn = "*"
+scikit-image = "*"
+hdbscan = "*"
+
+# --- ПЕРЕНЕСЕНО ИЗ PIP В CONDA ДЛЯ СТАБИЛЬНОСТИ ---
+opencv = "*"           # В pip это было opencv-python
+pyside6 = "*"          # В conda он содержит в себе и базу, и Addons
+pyqtgraph = "*"
+pysoundfile = "*"      # В conda пакет soundfile называется pysoundfile
+
+[pypi-dependencies]
+# Оставляем в pip только те мелкие пакеты, которых нет в conda-forge
+qt_themes = "*"
+guano = "*"
