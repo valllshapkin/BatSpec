@@ -64,8 +64,10 @@ class ProjectState:
     def __init__(self) -> None:
         self.signals = self.Signals()
         self.settings = self.ProjectSettings()
-        if self.settings.open_project:
+        try: 
             self.loadProject(Path(self.settings.open_project))
+        except:
+            self.settings.open_project = ""
 
     def isUploaded(self) -> bool:
         return self.currentProject is not None

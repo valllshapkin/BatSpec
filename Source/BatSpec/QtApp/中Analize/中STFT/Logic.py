@@ -72,8 +72,11 @@ class StftState:
         self.signals = self.Signals()
         self.settings = self.Settings()
 
-        if self.settings.window: 
+        try:
             self.setWindowFile(Path(self.settings.window))
+        except:
+            self.settings.window = ""
+            
         self.overlap = self.settings.overlap
         self.bins = self.settings.bins
 

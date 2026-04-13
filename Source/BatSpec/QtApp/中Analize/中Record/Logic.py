@@ -73,7 +73,10 @@ class RecordState:
         self.settings = self.RecordSettings()
         if self.settings.open_path: 
             print("Restore", self.settings.open_path)
-            self.setRecordFile(Path(self.settings.open_path))
+            try:
+                self.setRecordFile(Path(self.settings.open_path))
+            except:
+                self.settings.open_path = ""
             
     def setRecordFile(self, path: Path | None):
         if not path:
