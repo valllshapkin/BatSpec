@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import Any, Tuple, Union
+from typing import Any, Self, Tuple, Union
 from jaxtyping import Shaped, Array
 from Physics.Units import ureg, PintUnit
 from Physics.Context import fw
 
-class Function: 
-    pass
+class Function: pass
 
 class Function1D(Function):
     _value_a: Array
@@ -18,7 +17,9 @@ class Function1D(Function):
     
     def saveNPZ(self, path: Union[str, Path]):
         import numpy as np
-        if not isinstance(self._value_a, np.ndarray) or not isinstance(self._axis__a, np.ndarray): raise RuntimeError()
+        if not isinstance(self._value_a, np.ndarray) or not isinstance(self._axis__a, np.ndarray): 
+            raise RuntimeError("Arrays must be numpy ndarrays before saving.")
+            
         np.savez_compressed(path,
             value_a = self._value_a,
             axis__a = self._axis__a,
@@ -31,23 +32,32 @@ class Function1D(Function):
         import numpy as np
         with np.load(path) as data:
             return cls(
-                _value_a = data["_value_a"],
-                _value_u = data["_value_u"],
-                _axis__a = data["_axis__a"],
-                _axis__u = data["_axis__u"]
+                _value_a = data["value_a"],
+                _value_u = ureg.Unit(str(data["value_u"])),
+                _axis__a = data["axis__a"],     
+                _axis__u = ureg.Unit(str(data["axis__u"])) 
             )
+
+    @property
+    def _d_axis__a(self) -> Tuple[PintUnit, float]:
+        import numpy as np
+        if len(self._axis__a) < 2:
+            raise ValueError("Cannot calculate step size for an array with less than 2 elements.")
+        step = np.mean(np.diff(self._axis__a))
+        return (self._axis__u, float(step))
 
 class TimeFunc(Function1D):
 
-    _axis__u: PintUnit = ureg.Unit("s")
+    _axis__u: PintUnit = ureg.second
 
     def __init__(self, values: Array, axis: Array, unit_values: PintUnit):
+        if len(values) != len(axis): raise ValueError("values and axis must have the same length")
         self._value_a = values
         self._axis__a = axis
         self._value_u = unit_values
 
     @classmethod
-    def from_Function1D(cls, func: Function1D):
+    def from_Function1D(cls, func: Function1D) -> Self:
         return cls(func._value_a, func._axis__a, func._value_u)
     
     @classmethod
@@ -62,15 +72,36 @@ class TimeFunc(Function1D):
     
     @time.setter
     def time(self, value: Array):
+        if len(value) != len(self._value_a):
+            raise ValueError(f"New time array must have length {len(self._value_a)}, got {len(value)}")
         self._value_a = value
 
+    @property
+    def start(self) -> float:
+        return float(self._axis__a[0])
+    
+    @property
+    def end(self) -> float:
+        return float(self._axis__a[-1])
+    
     @property
     def values(self) -> Tuple[PintUnit, Array]:
         return self._value_u, self._value_a
 
     @values.setter
     def values(self, value: Array):
+        if len(value) != len(self._axis__a):
+            raise ValueError(f"New values must have length {len(self._axis__a)}, got {len(value)}")
         self._value_a = value
+        
+    @property
+    def dt(self) -> Tuple[PintUnit, float]:
+        return self._d_axis__a
+
+    @property
+    def sr(self) -> int:
+        _, dt = self.dt
+        return round(1.0 / dt)
 
     def saveNPZ(self, path: Union[str, Path]):
         Function1D.saveNPZ(self, path)
@@ -78,7 +109,7 @@ class TimeFunc(Function1D):
     @classmethod
     def loadNPZ(cls, path: Union[str, Path]):
         return cls.from_Function1D(Function1D.loadNPZ(path))
-
+    
 class Function2D(Function):
     _matrx_a: Shaped[Array, "X Y"]
     _matrx_u: PintUnit
@@ -127,6 +158,26 @@ class Function2D(Function):
                 _sec___u = ureg.Unit(str(data["_sec___u"]))
             )
 
+    @property
+    def _d_first_a(self) -> Tuple[PintUnit, float]:
+        import numpy as np
+        if len(self._first_a) < 2:
+            raise ValueError("Cannot calculate step size for an array with less than 2 elements.")
+        
+        # Вычисляем средний шаг между элементами
+        step = np.mean(np.diff(self._first_a))
+        return (self._first_u, float(step))
+
+    @property
+    def _d_sec___a(self) -> Tuple[PintUnit, float]:
+        import numpy as np
+        if len(self._sec___a) < 2:
+            raise ValueError("Cannot calculate step size for an array with less than 2 elements.")
+        
+        # Вычисляем средний шаг между элементами
+        step = np.mean(np.diff(self._sec___a))
+        return (self._sec___u, float(step))
+
 class SpecFunc(Function2D):
     _first_u: PintUnit = ureg.Unit("s")
     _sec___u: PintUnit = ureg.Unit("Hz")
@@ -171,6 +222,14 @@ class SpecFunc(Function2D):
     @values.setter
     def values(self, value: Shaped[Array, "T H"]):
         self._matrx_a = value
+
+    @property
+    def dt(self) -> Tuple[PintUnit, float]:
+        return self._d_first_a
+
+    @property
+    def df(self) -> Tuple[PintUnit, float]:
+        return self._d_sec___a
 
     def saveNPZ(self, path: Union[str, Path]):
         Function2D.saveNPZ(self, path)
