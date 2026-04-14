@@ -14,14 +14,23 @@ from .Logic import GRAPH_STATE
 
 AXIS_LEFT_WIDTH = 32
 
+from typing import Optional
+
+from PySide6.QtWidgets import QButtonGroup, QCheckBox, QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot, QPointF
+from PySide6 import QtGui
+import numpy as np
+import pyqtgraph as pg
+
+from BatSpec.Logic.Functions import TimeFunc, SpecFunc
+from BatSpec.QtApp.Shared.中ThemeSettings.Logic import Themes
+from BatSpec.QtUp.Image import AdaptiveImageItem
+
+from .Logic import GRAPH_STATE
+
+AXIS_LEFT_WIDTH = 32
+
 class MinimapPlot(Themes.Trigger, GRAPH_STATE.TriggerMinimap, pg.PlotItem):
-    """
-    UI Hierarchy:
-    MinimapPlot (pg.PlotItem)
-    ├── self._curve : pg.PlotDataItem     (Main graph line and fill)
-    └── self.region : pg.LinearRegionItem (Draggable selection bounds)
-    """
-    
     def __init__(self) -> None:
         pg.PlotItem.__init__(self)
         self.setMaximumHeight(60)
@@ -42,17 +51,33 @@ class MinimapPlot(Themes.Trigger, GRAPH_STATE.TriggerMinimap, pg.PlotItem):
         if GRAPH_STATE.time_func is None:
             self._curve.setData([], [])
             self.setLimits(xMin=None, xMax=None)
-            self.setXRange(0, 1, padding=0)  # временный диапазон
-            self.region.setBounds([0, 1])    # фиктивные границы
+            self.setXRange(0, 1, padding=0)
+            
+            # Блокируем сигналы, чтобы не запустить Syncer с пустыми данными
+            self.region.blockSignals(True)
+            self.region.setBounds([0, 1])
             self.region.setRegion([0, 1])
+            self.region.blockSignals(False)
             return
         
         func = GRAPH_STATE.time_func
+        # Переводим в float на случай если приходят numpy скаляры
+        t0, t1 = float(func.time_axis[0]), float(func.time_axis[-1])
+        
         self._curve.setData(x=func.time_axis, y=func.data)
-        self.setLimits(xMin=0, xMax=func.duration)
-        self.setXRange(0, func.duration, padding=0)
-        self.region.setBounds([0, func.duration])
-        self.region.setRegion([0, func.duration])
+        
+        # 1. СНАЧАЛА сбрасываем лимиты, чтобы они не конфликтовали с новым диапазоном
+        self.setLimits(xMin=None, xMax=None)
+        self.setXRange(t0, t1, padding=0)
+        
+        # 2. Двигаем регион "тихо", чтобы не спровоцировать Syncer сдвинуть MainGraph раньше времени
+        self.region.blockSignals(True)
+        self.region.setBounds([t0, t1])
+        self.region.setRegion([t0, t1])
+        self.region.blockSignals(False)
+        
+        # 3. ПОСЛЕ установки обзора возвращаем новые лимиты
+        self.setLimits(xMin=t0, xMax=t1)
 
     def onThemeChange(self):
         self._curve.setPen(pg.mkPen(Themes.get_curent_theme().primary, width=1))
@@ -84,23 +109,8 @@ class Syncer:
 
 
 class MainGraph(GRAPH_STATE.TriggerGraph, QWidget):
-    """
-    UI Hierarchy:
-    MainGraph (QWidget)
-    └── self.main_layout : QVBoxLayout
-        └── self.graphics_layout : pg.GraphicsLayoutWidget
-            │
-            ├── [Row 0] self.spec_plot : pg.PlotItem  <-- uses self.view_box : pg.ViewBox
-            │   ├── self.image_item : AdaptiveImageItem
-            │   └── self.roi_layer : FastROILayer
-            │
-            └── [Row 1] self.minimap : MinimapPlot
-    """
-
     def __init__(self):
         QWidget.__init__(self)
-        
-        # Добавляем флаг для отслеживания первой загрузки данных
         self._data_loaded = False  
 
         self.main_layout = QVBoxLayout(self)
@@ -129,38 +139,46 @@ class MainGraph(GRAPH_STATE.TriggerGraph, QWidget):
     def onChangeSpecFunc(self):
         if GRAPH_STATE.spec_func is None:
             self.image_item.clear()
-
             self.spec_plot.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
             self.spec_plot.setXRange(0, 1, padding=0)
             self.spec_plot.setYRange(0, 1, padding=0)
-            
-            # Сбрасываем флаг: следующие данные будут считаться "первыми"
             self._data_loaded = False 
             return
         
         func = GRAPH_STATE.spec_func
-        t0, t1 = (func.time[0], func.time[-1])
-        f0, f1 = (func.freq[0], func.freq[-1])
+        t0, t1 = float(func.time[0]), float(func.time[-1])
+        f0, f1 = float(func.freq[0]), float(func.freq[-1])
         
         self.image_item.setFullData(func.matrix.T, (t0, t1), (f0, f1))
 
-        # setLimits ОБЯЗАТЕЛЬНО обновляем всегда. 
-        # Это не меняет зум, но не дает пользователю "улететь" за пределы новых данных
-        self.spec_plot.setLimits(xMin=t0, xMax=t1, yMin=f0, yMax=f1)
+        # 1. ОБЯЗАТЕЛЬНО отключаем лимиты перед применением новых X/Y Range
+        # Иначе pyqtgraph жестко сожмет обзор (clamp), если старый зум выходит за новые границы
+        self.spec_plot.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
 
-        # Меняем зум только если это ПЕРВАЯ загрузка данных
         if not self._data_loaded:
             self.spec_plot.setXRange(t0, t1, padding=0)
             if GRAPH_STATE.lock_y:
                 self.spec_plot.setYRange(f0, f1, padding=0)
             self._data_loaded = True
         else:
-            # Если данные обновляются, но ось Y заблокирована — принудительно держим Y в полных границах.
-            # (Ось X при этом не трогаем, сохраняя зум пользователя по времени)
+            # Если пользователь загрузил новый файл, чье время вообще не пересекается
+            # со старым, старый зум оставит его смотреть в пустоту. Проверяем это:
+            current_x = self.spec_plot.viewRange()[0]
+            if current_x[1] <= t0 or current_x[0] >= t1:
+                # Зум полностью за пределами новых данных -> сбрасываем на полный обзор
+                self.spec_plot.setXRange(t0, t1, padding=0)
+                
             if GRAPH_STATE.lock_y:
                 self.spec_plot.setYRange(f0, f1, padding=0)
 
+        # 2. ПОСЛЕ того как виджет сцентрирован на правильных координатах,
+        # возвращаем ограничители (Limits), чтобы нельзя было улететь за границы.
+        if func.duration > 1:
+            self.spec_plot.setLimits(xMin=t0, xMax=t1, yMin=f0, yMax=f1)
+        else:
+            self.spec_plot.setLimits(xMin=None, xMax=None, yMin=f0, yMax=f1)
 
+    # Остальные методы (onChangeColorMap, onChangeLockY и т.д.) без изменений
     def onChangeColorMap(self):
         cm = GRAPH_STATE.colormap
         if not cm: raise RuntimeError()
@@ -171,7 +189,7 @@ class MainGraph(GRAPH_STATE.TriggerGraph, QWidget):
         locked = GRAPH_STATE.lock_y
         self.spec_plot.setMouseEnabled(x=True, y=not locked)
         if locked and GRAPH_STATE.spec_func:
-            f0, f1 = (GRAPH_STATE.spec_func.freq[0], GRAPH_STATE.spec_func.freq[-1])
+            f0, f1 = (float(GRAPH_STATE.spec_func.freq[0]), float(GRAPH_STATE.spec_func.freq[-1]))
             self.spec_plot.setYRange(f0, f1, padding=0)
 
 class LockYCheckBox(QCheckBox, GRAPH_STATE.TriggerGraph):

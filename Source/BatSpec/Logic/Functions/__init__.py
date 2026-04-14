@@ -67,6 +67,10 @@ class SpecFunc[Float](SaveIntegralProtocol):
     def df(self) -> float:
         return self.freq[1] - self.freq[0]
 
+    @property
+    def duration(self) -> float:
+        return self.time[-1] - self.time[0]
+
     def SaveIntegralEnergy(self):
         return self.FW.sum(self.matrix**2) * self.dt * self.df
     
