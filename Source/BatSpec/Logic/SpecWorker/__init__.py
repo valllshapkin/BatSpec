@@ -248,8 +248,6 @@ def harmonicPercussive(spec: SpecFunc) -> Tuple[SpecFunc, SpecFunc]:
     harmonic, percussive = librosa.decompose.hpss(D_transposed)
     return SpecFunc(harmonic.T, spec.freq, spec.time), SpecFunc(percussive.T, spec.freq, spec.time)
 
-def makeLog(spec: SpecFunc) -> SpecFunc:
-    return spec.cloneApply(lambda arr: 20 * np.log10(np.clip(arr, 1e-9, None)))
 
 def makeBinarization(spec: SpecFunc, trashhold=32) -> SpecFunc:
     return spec.cloneApply(lambda arr: np.where(arr > trashhold, 1, 0))
