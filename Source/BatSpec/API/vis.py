@@ -14,7 +14,6 @@ def showSettingsPanel():
         window.show()
 
 
-
 def showSpecFuncs(*spec: SpecFunc):
     from BatSpec.QtApp.Logic import application
 

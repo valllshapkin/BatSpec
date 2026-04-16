@@ -1383,11 +1383,3 @@ def fillFromSpec(
 
     return crop
 
-
-def centrateCorpMass(corp: SpecFunc):
-    return SpecFunc(
-        corp.matrix.copy(), 
-        freq=corp.freq.copy(), 
-        time=corp.time - np.average(corp.time, weights=corp.matrix.sum(axis=1))
-    )
-    
