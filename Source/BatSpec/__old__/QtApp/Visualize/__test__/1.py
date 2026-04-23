@@ -3,7 +3,7 @@ ScriptDir = Path(__file__).parent
 from BatSpec.Work.Record import loadRecord, correctDC
 from BatSpec.Work.Record.Calibration import FlatResponseModel, applyСalibration
 from BatSpec.Work.SaveIntegral import SaveIntegralEnergy
-from BatSpec.Work.Spectral import makeSpec, makeLogDB
+from BatSpec.Work.Spectral import localZNorm, makeSpec, makeLogDB, correlationTransform
 from BatSpec.Work.ConvWindow import TEST_HANN_WINODW
 
 
@@ -35,7 +35,6 @@ SaveIntegralEnergy(record): {SaveIntegralEnergy(record)}
 """)
 
 SPSL = makeLogDB(spec)
-
 
 # from BatSpec.Work.Spectral import extractPeakContext, saveSpecToPNG
 # saveSpecToPNG(extractPeakContext(SPSL), ScriptDir / "MYODAS_20230624_004924.debug.png")

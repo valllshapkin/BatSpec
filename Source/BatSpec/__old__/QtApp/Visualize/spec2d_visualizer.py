@@ -1,16 +1,18 @@
 import sys
 import numpy as np
+import torch
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QPointF
-from typing import Any
 
 # --- Твои импорты ---
 from BatSpec.QtUp.Reactive.reactive_dict import ReactiveDict
 from BatSpec.QtUp.Selector import Selector
-from BatSpec.Work.Function import SpecFunc
-# Импорт твоего кастомного ImageItem
 from BatSpec.QtUp.Image import AdaptiveImageItem
+
+# Подставьте актуальные пути
+from BatSpec.Core.Functions import SpecFunc
+from BatSpec.Core.Physical.Units import UREG
 
 
 # =====================================================================
@@ -27,7 +29,7 @@ def remove_spec2d(name: str) -> None:
         del plot2d_store[name]
 
 # =====================================================================
-# 2. ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ (Без изменений)
+# 2. ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ
 # =====================================================================
 
 class Syncer(QtCore.QObject):
@@ -53,7 +55,6 @@ class Syncer(QtCore.QObject):
         self._region.setRegion(self._view.viewRange()[0])
         self._updating = False
 
-
 class HoverTracker(QtWidgets.QLabel):
     """Отображает координаты и значение спектрограммы под курсором."""
     def __init__(self, view_box: pg.ViewBox, parent=None):
@@ -70,8 +71,9 @@ class HoverTracker(QtWidgets.QLabel):
         if scene is not None:
             scene.sigMouseMoved.connect(self._on_mouse_moved)
 
-    def set_data(self, matrix_t: np.ndarray, t0: float, t1: float, f0: float, f1: float, unit: str):
-        self._matrix = matrix_t 
+    # ИЗМЕНЕНИЕ: Аргумент теперь называется matrix_yx для ясности (Y=freq, X=time)
+    def set_data(self, matrix_yx: np.ndarray, t0: float, t1: float, f0: float, f1: float, unit: str):
+        self._matrix = matrix_yx 
         self._t_min, self._t_max = t0, t1
         self._f_min, self._f_max = f0, f1
         self._unit = unit
@@ -97,13 +99,13 @@ class HoverTracker(QtWidgets.QLabel):
             self.setText(f"t={t:.3f} s, f={f:.1f} Hz  [outside bounds]")
             return
 
+        # ИЗМЕНЕНИЕ: Логика индексации теперь соответствует формату (freq, time)
         freq_bins, time_bins = self._matrix.shape
         t_idx = int(np.clip((t - self._t_min) / (self._t_max - self._t_min) * time_bins, 0, time_bins - 1))
         f_idx = int(np.clip((f - self._f_min) / (self._f_max - self._f_min) * freq_bins, 0, freq_bins - 1))
         
-        value = float(self._matrix[f_idx, t_idx])
+        value = float(self._matrix[f_idx, t_idx]) # Правильный порядок: [freq_idx, time_idx]
         self.setText(f"t = {t:.3f} s | f = {f:.1f} Hz | val = {value:.2f} {self._unit}")
-
 
 # =====================================================================
 # 3. ОСНОВНОЙ ВИДЖЕТ ВИЗУАЛИЗАТОРА СПЕКТРОГРАММ
@@ -119,12 +121,7 @@ class Spec2DVisualizer(QtWidgets.QGroupBox):
         self._setup_pyqtgraph()
         self._connect_signals()
 
-        # Инициализируем палитру
         self._on_colormap_changed(self.cm_combo.currentText())
-        
-        # <<< --- ИСПРАВЛЕНИЕ: ПЕРВАЯ ОТРИСОВКА --- >>>
-        # Вызываем отрисовку вручную, чтобы отобразить начальное состояние,
-        # которое могло быть в plot2d_store еще до создания виджета.
         self._redraw_all()
 
     def _setup_ui(self):
@@ -195,22 +192,33 @@ class Spec2DVisualizer(QtWidgets.QGroupBox):
             self._clear_all()
             return
 
-        matrix = np.asarray(func._matrx_a)
-        t_axis = np.asarray(func._first_a)
-        f_axis = np.asarray(func._sec___a)
-        unit_str = str(func._matrx_u)
+        matrix_tensor, unit_obj = func.values
+        f_tensor, _ = func.freq
+        t_tensor, _ = func.time
+
+        if matrix_tensor.ndim > 2:
+            matrix_tensor = matrix_tensor[0]
+
+        matrix_np = matrix_tensor.detach().cpu().numpy()  # Форма (freq, time)
+        f_axis = f_tensor.detach().cpu().numpy()
+        t_axis = t_tensor.detach().cpu().numpy()
+        unit_str = str(unit_obj)
 
         t0, t1 = float(t_axis[0]), float(t_axis[-1])
         f0, f1 = float(f_axis[0]), float(f_axis[-1])
 
-        matrix_t = matrix.T
-        self.image_item.setFullData(matrix_t, (t0, t1), (f0, f1))
+        # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+        # ImageItem ожидает данные (Y, X), т.е. (freq, time).
+        # Наша матрица matrix_np УЖЕ имеет эту форму, поэтому транспонирование НЕ НУЖНО.
+        self.image_item.setFullData(matrix_np, (t0, t1), (f0, f1))
 
-        minimap_data = np.mean(matrix, axis=1)
+        minimap_data = np.mean(matrix_np, axis=0) # Усреднение по частотам (axis=0)
         self.minimap_curve.setData(x=t_axis, y=minimap_data)
 
-        self.hover_tracker.set_data(matrix_t, t0, t1, f0, f1, unit_str)
+        # Передаем в HoverTracker тоже не-транспонированную матрицу
+        self.hover_tracker.set_data(matrix_np, t0, t1, f0, f1, unit_str)
         self._update_camera_limits(t0, t1, f0, f1)
+
 
     def _update_camera_limits(self, t0: float, t1: float, f0: float, f1: float):
         self.spec_plot.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
@@ -267,8 +275,9 @@ class Spec2DVisualizer(QtWidgets.QGroupBox):
         
         func = self.selector.active_value()
         if checked and func is not None:
-            f0 = float(np.asarray(func._sec___a)[0])
-            f1 = float(np.asarray(func._sec___a)[-1])
+            f_tensor, _ = func.freq
+            f0 = float(f_tensor[0])
+            f1 = float(f_tensor[-1])
             self.spec_plot.setYRange(f0, f1, padding=0)
 
 # =====================================================================
@@ -279,18 +288,32 @@ def run_standalone_demo():
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     
-    # --- СНАЧАЛА создаем данные, ПОТОМ создаем UI ---
-    # Это эмулирует твой случай: данные уже существуют на момент создания виджета.
-    t = np.linspace(0, 10, 4000)
-    f = np.linspace(0, 100, 200)
-    T, F = np.meshgrid(t, f)
-    matrix = np.sin(T * 2) * np.exp(-(F - 50)**2 / 50) # Синусоида с центром на 50 Гц
-    spec_func = SpecFunc(matrix.T, t, f, "V")
+    # --- СНАЧАЛА создаем данные в NumPy ---
+    t_np = np.linspace(0, 10, 4000)
+    f_np = np.linspace(0, 100, 200)
+    
+    # T, F meshgrid создает матрицу, где ось 0 - это частота (f_np), а ось 1 - время (t_np)
+    # Форма будет (200, 4000) -> (freq, time)
+    T, F = np.meshgrid(t_np, f_np) 
+    matrix_np = np.sin(T * 2) * np.exp(-(F - 50)**2 / 50) 
+    
+    # Конвертируем в тензоры PyTorch для SpecFunc
+    matrix_t = torch.tensor(matrix_np, dtype=torch.float32)
+    time_t = torch.tensor(t_np, dtype=torch.float32)
+    freq_t = torch.tensor(f_np, dtype=torch.float32)
+
+    # Инициализируем SpecFunc по новым правилам
+    spec_func = SpecFunc(
+        matrix=(matrix_t, UREG.V),
+        freq=freq_t,
+        time=time_t
+    )
+    
     update_spec2d("Test Spectrogram", spec_func)
     
     # Создаем главное окно
     main_window = QtWidgets.QMainWindow()
-    main_window.setWindowTitle("Тест Визуализатора SpecFunc")
+    main_window.setWindowTitle("Тест Визуализатора SpecFunc (PyTorch edition)")
     main_window.resize(1000, 800)
     
     # Добавляем наш виджет
