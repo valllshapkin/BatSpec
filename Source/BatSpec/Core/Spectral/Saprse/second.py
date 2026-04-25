@@ -5,8 +5,8 @@ import torch.nn.functional as F
 import numpy as np
 from sklearn.decomposition import NMF
 from tqdm.auto import tqdm
-from NewSpec.Core.Functions import SpecFunc, TimeFunc
-from NewSpec.Core.Units import UREG
+from BatSpec.Core.Functions import SpecFunc, TimeFunc
+from BatSpec.Core.Physical.Units import UREG
 # =====================================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # =====================================================================

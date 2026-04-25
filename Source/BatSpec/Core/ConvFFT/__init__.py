@@ -3,9 +3,9 @@ import torch
 import torch.fft
 from typing import Union
 
-from NewSpec.Core.Functions import SpecFunc, TimeFunc
-from NewSpec.Core.Spectral.Some import matchPearsonFT
-from NewSpec.Core.Units import UREG, unit_mul
+from BatSpec.Core.Functions import SpecFunc, TimeFunc
+from BatSpec.Core.Spectral.Some import matchPearsonFT
+from BatSpec.Core.Physical.Units import UREG, unit_mul
 
 def _get_zero_index(time_axis: torch.Tensor) -> int:
     """Находит индекс якоря: точку на оси времени, максимально близкую к 0."""

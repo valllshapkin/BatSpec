@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-from NewSpec.Core.Functions import SpecFunc
-from NewSpec.Core.Units import UREG
+from BatSpec.Core.Functions import SpecFunc
+from BatSpec.Core.Physical.Units import UREG
 
 
 class _FreqDomainDeconvFilter(nn.Module):

@@ -7,10 +7,24 @@ from BatSpec.Core.Physical.Units import PintUnit, Phisical, UREG, unit_mul
 from BatSpec.Core.Physical.Arrays import TensorLike, convert_to_framework
 from BatSpec.Core.SaveIntegral import SaveIntegral
 
-class Function: pass
+
 
 ArrayLike = Any 
 
+
+def _get_fw_info(tensor: Any) -> tuple[str, Any]:
+    """Определяет фреймворк и устройство тензора."""
+    type_str = str(type(tensor)).lower()
+    
+    # Пытаемся получить устройство. Для NumPy это вернет 'cpu'
+    dev = getattr(tensor, 'device', 'cpu')
+    
+    if 'torch' in type_str: 
+        return 'torch', dev
+    elif 'tensorflow' in type_str: 
+        return 'tensorflow', dev
+    else:
+        return 'numpy', dev
 
 # --- 3. Хелпер для кросс-фреймворковых операций ---
 def _array_sum(tensor: ArrayLike, axis: Union[int, tuple[int, ...]]) -> ArrayLike:
@@ -27,12 +41,33 @@ def _array_sum(tensor: ArrayLike, axis: Union[int, tuple[int, ...]]) -> ArrayLik
         # Для NumPy, JAX, CuPy и тех, кто соблюдает Array API
         return tensor.sum(axis=axis)
 
+class Function:
+    @property
+    def _primary_tensor(self) -> ArrayLike:
+        """Возвращает главный тензор объекта для определения фреймворка/устройства."""
+        raise NotImplementedError()
 
+    @property
+    def framework(self) -> str:
+        """Возвращает текущий фреймворк данных ('numpy', 'torch', 'tensorflow')."""
+        fw, _ = _get_fw_info(self._primary_tensor)
+        return fw
+
+    @property
+    def device(self) -> Any:
+        """Возвращает устройство (device), на котором находятся данные."""
+        _, dev = _get_fw_info(self._primary_tensor)
+        return dev
+    
 class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     _value_a: Shaped[ArrayLike, '... x']
     _value_u: PintUnit
     _axis__a: Shaped[ArrayLike, 'x']
     _axis__u: PintUnit
+
+    @property
+    def _primary_tensor(self) -> ArrayLike:
+        return self._value_a  # Ориентируемся по главному массиву значений
 
     def __init__(self, values: Phisical[Shaped[ArrayLike, '... x']], axis: Phisical[Float[ArrayLike, "axis"]]):
         self._value_a, self._value_u = values
@@ -235,6 +270,10 @@ class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     _first_u: PintUnit
     _sec___a: Shaped[ArrayLike, 'y']
     _sec___u: PintUnit
+
+    @property
+    def _primary_tensor(self) -> ArrayLike:
+        return self._matrx_a  # Ориентируемся по 2D матрице
 
     def __init__(self, 
                  matrix: Phisical[Shaped[ArrayLike, '... x y']], 

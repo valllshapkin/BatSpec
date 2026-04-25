@@ -1,17 +1,18 @@
 from pathlib import Path
 
-from NewSpec.Core.Functions import SpecFunc, TimeFunc
-from NewSpec.Core.Spectral.Echo import deconvolveEcho
+from BatSpec.Core.Functions import SpecFunc, TimeFunc
+from BatSpec.Core.Spectral.Echo import deconvolveEcho
 ScriptDir = Path(__file__).parent
-from NewSpec.Core.ConvWindow import TEST_HANN_WINODW
-from NewSpec.Core.Record import loadRecord, correctDC
-from NewSpec.Core.Record.Calibration import FlatResponseModel, applyСalibration
-from NewSpec.Core.SaveIntegral import SaveIntegral
-from NewSpec.Core.Spectral import makeSpec, makeLogDB, interpolateByFactors, blurSpec
-from NewSpec.Core.Spectral.Statistic import noiseZNormByFreq
-from NewSpec.Core.Spectral.Saprse.second import discover_best_pattern_with_callback
-from NewSpec.Core.Spectral.Echo.Blind import deconvolve_echo_wiener_style
-from BatSpec.QtApp.Visualize import update_function, update_spec2d, run_visualizer
+from BatSpec.Core.ConvWindow import TEST_HANN_WINODW
+from BatSpec.Core.Record import loadRecord, correctDC
+from BatSpec.Core.Record.Calibration import FlatResponseModel, applyСalibration
+from BatSpec.Core.SaveIntegral import SaveIntegral
+from BatSpec.Core.Spectral import makeSpec, makeLogDB, interpolateByFactors, blurSpec, highPassSpec
+from BatSpec.Core.Spectral.Statistic import noiseZNormByFreq
+from BatSpec.Core.Spectral.Saprse.second import discover_best_pattern_with_callback
+from BatSpec.Core.Spectral.Echo.Blind import deconvolve_echo_wiener_style
+from 
+from BatSpec.Visualize import update_function, update_spec2d, run_visualizer
 
 @run_visualizer
 def main():
@@ -30,6 +31,9 @@ def main():
     zspec = noiseZNormByFreq(spec, noise_percentile=10)
     update_spec2d("zspec", makeLogDB(zspec, add_one=True))
 
+    # high_pass = highPassSpec(zspec, sigma = 1)
+    # update_spec2d("high_pass", makeLogDB(high_pass, add_one=True))
+
     # zblur = blurSpec(zspec, sigma=(4, 4))
     # update_spec2d("zblur", makeLogDB(zblur, add_one=True))
 
@@ -43,22 +47,22 @@ def main():
     # def makeLogDB(spec, add_one): ...
     # low: SpecFunc = ...
 
-    def my_visualizer_callback(a: SpecFunc, b: SpecFunc):
-        update_spec2d("a", makeLogDB(a))
-        update_spec2d("b", makeLogDB(b))
+    # def my_visualizer_callback(a: SpecFunc, b: SpecFunc):
+    #     update_spec2d("a", makeLogDB(a))
+    #     update_spec2d("b", makeLogDB(b))
 
-    deconvolve_echo_wiener_style(
-        interpolateByFactors(spec, (0.5, 0.5)),
-        echo_duration_limit_ms=50,
-        epochs=1000,
-        learning_rate=0.01,
-        lambda_sparsity=0.05,
-        lambda_echo_decay=10,
-        lambda_echo_positivity=0.5,
-        device="cuda",
-        callback=my_visualizer_callback,
-        callback_interval_percent=1
-    )
+    # deconvolve_echo_wiener_style(
+    #     interpolateByFactors(spec, (0.5, 0.5)),
+    #     echo_duration_limit_ms=50,
+    #     epochs=1000,
+    #     learning_rate=0.01,
+    #     lambda_sparsity=0.05,
+    #     lambda_echo_decay=10,
+    #     lambda_echo_positivity=0.5,
+    #     device="cuda",
+    #     callback=my_visualizer_callback,
+    #     callback_interval_percent=1
+    # )
 
 
     # # Запуск основной функции

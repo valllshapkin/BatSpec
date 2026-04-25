@@ -3,8 +3,8 @@ from typing import List, Tuple
 import torch
 import torch.nn as nn
 
-from NewSpec.Core.Units import UREG
-from NewSpec.Core.Functions import SpecFunc, TimeFunc
+from BatSpec.Core.Physical.Units import UREG
+from BatSpec.Core.Functions import SpecFunc, TimeFunc
 
 def _get_zero_index(time_axis: torch.Tensor) -> int:
     """Находит индекс якоря: точку на оси времени, максимально близкую к 0."""

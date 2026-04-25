@@ -6,8 +6,8 @@ import numpy as np
 from sklearn.decomposition import NMF
 from tqdm.auto import tqdm
 
-from NewSpec.Core.Functions import SpecFunc, TimeFunc
-from NewSpec.Core.Units import UREG
+from BatSpec.Core.Functions import SpecFunc, TimeFunc
+from BatSpec.Core.Physical.Units import UREG
 
 class _FFTSpecConvDecomposer(nn.Module):
     def __init__(self, num_patterns: int, num_freqs: int, win_width: int, seq_len: int, dtype: torch.dtype):

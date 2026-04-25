@@ -1,196 +1,230 @@
-from typing import Tuple, Optional
 import torch
-import torch.nn as nn
-from tqdm.auto import tqdm
+import torch.nn.functional as F
+from typing import Tuple, Optional, Any
+import warnings
 
-from NewSpec.Core.Functions import SpecFunc
-from NewSpec.Core.Units import UREG
+# --- Импорты из вашего проекта ---
+from BatSpec.Core.Functions import SpecFunc
+from BatSpec.Core.Physical.Units import UREG
+from BatSpec.Core.ConvFFT import convolveTime
+
+# =====================================================================
+# Вспомогательные функции (Межфреймворковый мост)
+# =====================================================================
+def _get_fw_info(tensor: Any) -> Tuple[str, Any]:
+    """Определяет фреймворк и устройство тензора."""
+    type_str = str(type(tensor)).lower()
+    dev = getattr(tensor, 'device', None)
+    if 'torch' in type_str: return 'torch', dev
+    if 'tensorflow' in type_str: return 'tensorflow', dev
+    return 'numpy', dev
 
 
-class AnchoredConv2D_2DKernel(nn.Module):
-    def __init__(self, data: torch.Tensor, zero_index: int):
-        super().__init__()
-        assert data.dim() >= 2, "Окно должно иметь минимум 2 оси (F, W)"
-        assert 0 <= zero_index < data.size(-1), "zero_index выходит за границы"
+# =====================================================================
+# Физические генераторы Эха
+# =====================================================================
+def _get_zero_index(time_axis: torch.Tensor) -> int:
+    """Находит индекс якоря (t=0) на оси времени."""
+    return int(torch.argmin(torch.abs(time_axis)))
+
+def init_derivatives_window(ref_spec: SpecFunc, duration_ms: float, anchor_pct: float) -> SpecFunc:
+    """Инициализирует окно стартовых производных для эха."""
+    dt_val, _ = ref_spec.dt
+    f_axis, _ = ref_spec.freq
+    duration_s = duration_ms / 1000.0
+    N_time = max(2, int(round(duration_s / dt_val)))
+    anchor_idx = int(round(N_time * (anchor_pct / 100.0)))
+    anchor_idx = max(0, min(N_time - 1, anchor_idx))
     
-        if not isinstance(data, nn.Parameter):
-            self.data = nn.Parameter(data)
-        else:
-            self.data = data
-            
-        self.zero_index = zero_index
+    t_axis = (torch.arange(N_time, dtype=f_axis.dtype, device=f_axis.device) - anchor_idx) * dt_val
+    N_freq = len(f_axis)
+    D = torch.zeros((1, N_freq, N_time), dtype=f_axis.dtype, device=f_axis.device)
+    
+    # Базовые стартовые значения (позже они будут обучаться)
+    if anchor_idx > 0: 
+        D[..., :anchor_idx] = 50.0 
+    if anchor_idx < N_time:
+        base_decay = -5.0
+        freq_penalty = (f_axis / (f_axis.max() + 1e-6)).unsqueeze(1) 
+        D[..., anchor_idx:] = base_decay - (15.0 * freq_penalty) 
+    
+    return SpecFunc(matrix=(D, UREG.hertz), freq=f_axis, time=t_axis)
 
-    def forward(self, signal: torch.Tensor) -> torch.Tensor:
-        assert signal.dim() >= 2, "Сигнал должен иметь минимум (F, T)"
+def build_causal_echo_window(derivatives_spec: SpecFunc) -> SpecFunc:
+    """Строит физически корректное окно эха (нормированное по энергии) из производных."""
+    D, _ = derivatives_spec.values
+    t_axis, _ = derivatives_spec.time
+    dt_val, _ = derivatives_spec.dt
+    
+    Z = _get_zero_index(t_axis)
+    D_left, D_right = D[..., :Z], D[..., Z:]
+    
+    # Интегрирование вправо
+    if D_right.shape[-1] > 0:
+        X_right = torch.cumsum(D_right, dim=-1) * dt_val
+        X_right = X_right - X_right[..., 0:1]
+    else: 
+        X_right = torch.empty((*D.shape[:-1], 0), dtype=D.dtype, device=D.device)
         
-        F_sig, T = signal.shape[-2], signal.shape[-1]
-        F_ker, W = self.data.shape[-2], self.data.shape[-1]
-        assert F_sig == F_ker, f"Оси F не совпадают: сигнал {F_sig}, ядро {F_ker}"
+    # Интегрирование влево
+    if D_left.shape[-1] > 0:
+        X_left = torch.flip(torch.cumsum(torch.flip(D_left, dims=[-1]), dim=-1) * (-dt_val), dims=[-1])
+    else: 
+        X_left = torch.empty((*D.shape[:-1], 0), dtype=D.dtype, device=D.device)
         
-        N = T + W - 1
-        
-        Sig_f = torch.fft.rfft(signal, n=N, dim=-1)
-        Ker_f = torch.fft.rfft(self.data, n=N, dim=-1)
-        
-        out = torch.fft.irfft(Sig_f * Ker_f, n=N, dim=-1)
-        
-        Z = self.zero_index
-        return out[..., Z : Z + T]
+    # Сборка экспоненты
+    echo_matrix = torch.exp(torch.cat([X_left, X_right], dim=-1))
+    
+    # Нормировка энергии (сумма=1 для каждой частоты)
+    echo_matrix = echo_matrix / (echo_matrix.sum(dim=-1, keepdim=True) + 1e-8) 
+    
+    return SpecFunc(matrix=(echo_matrix, UREG.dimensionless), freq=derivatives_spec.freq[0], time=t_axis)
+
+def spectral_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-3) -> torch.Tensor:
+    """Комбинированная функция потерь: Линейный MSE (амплитуды) + Логарифмический MSE (структура)."""
+    loss_linear = F.mse_loss(pred, target)
+    loss_log = F.mse_loss(torch.log(pred + eps), torch.log(target + eps))
+    return loss_linear + 0.1 * loss_log
 
 
+# =====================================================================
+# ОСНОВНАЯ ФУНКЦИЯ ДЕКОНВОЛЮЦИИ
+# =====================================================================
 def deconvolveEcho(
     spec: SpecFunc,
-    echo_duration_ms: float = 100.0,
-    num_iterations: int = 200,
-    learning_rate: float = 1e-3,
-    lambda_sparsity: float = 1e-4,
-    lambda_smooth_echo: float = 1e-2,
-    gaussian_sigma_ratio: float = 0.3,
-    enforce_energy_conservation: bool = True,
-    device: Optional[torch.device] = None
+    echo_duration_ms: float = 400.0,
+    anchor_pct: float = 10.0,
+    num_iterations: int = 1000,
+    lr_signal: float = 0.1,
+    lr_echo: float = 0.1,
+    lambda_sparsity: float = 5e-4,
+    lambda_smooth_echo: float = 1e-3,
+    device: Optional[Any] = None,
+    verbose: bool = True
 ) -> Tuple[SpecFunc, SpecFunc]:
     """
-    Выполняет слепую деконволюцию для Z-нормированной спектрограммы.
-    Использует гауссову инициализацию ядра эха.
-
-    Модель: S_observed ≈ V_clean * E_echo (свёртка по времени)
-
+    Слепая деконволюция для очистки спектрограммы от эха (Physics-Informed AI).
+    
+    Модель: S_observed ≈ S_clean * E_echo 
+    Алгоритм обучается как сигналам S_clean, так и параметрам затухания среды E_echo,
+    соблюдая строгие физические законы (каузальность, сохранение энергии, монотонность затухания).
+    
     Args:
-        spec: Исходная Z-нормированная спектрограмма.
-        echo_duration_ms: Длительность окна эха в миллисекундах.
-        num_iterations: Количество шагов оптимизации.
-        learning_rate: Скорость обучения.
-        lambda_sparsity: Коэффициент L1-штрафа для чистого сигнала.
-        lambda_smooth_echo: Коэффициент гладкости эха (по времени).
-        gaussian_sigma_ratio: Относительная ширина гаусса (sigma = duration * ratio).
-        enforce_energy_conservation: Нормировать ли эхо на каждой итерации.
-        device: Устройство для вычислений (cpu/cuda).
-
+        spec: Исходная зашумленная/искаженная спектрограмма.
+        echo_duration_ms: Длина окна эха в миллисекундах.
+        anchor_pct: Процент от начала окна, где находится якорь (0 мс). Например, 10.0.
+        num_iterations: Количество эпох оптимизации (рекомендуется 500-1000).
+        lr_signal: Скорость обучения для чистого сигнала.
+        lr_echo: Скорость обучения для профиля среды (производных).
+        lambda_sparsity: Сила L1-регуляризации (чем выше, тем чище фон, но могут пропасть тихие звуки).
+        lambda_smooth_echo: Штраф за резкое изменение свойств эха между соседними частотами.
+        device: Устройство для вычислений (по умолчанию берется из входного тензора).
+        verbose: Показывать ли прогресс-бар.
+        
     Returns:
-        Кортеж из двух SpecFunc: (очищенная_спектрограмма, профиль_эха).
+        Tuple[SpecFunc, SpecFunc]: Очищенный сигнал (S_clean) и профиль среды (E_echo).
     """
     
-    # 1. Извлечение данных и подготовка параметров
-    S_tensor, S_unit = spec.values
-    freq_axis, _ = spec.freq
-    time_axis, time_unit = spec.time
+    # 1. Межфреймворковый мост: определяем исходный формат и переходим в Torch
+    fw_target, dev_target = _get_fw_info(spec.values[0])
+    target_device = device if device is not None else dev_target
+    spec_torch = spec.to_framework('torch', device=target_device)
     
-    if device is None:
-        device = S_tensor.device
+    S_unit = spec_torch.values[1]
+    f_axis = spec_torch.freq[0]
+    t_axis = spec_torch.time[0]
+    
+    # Целевой сигнал (наблюдаемый спектр), с защитой от отрицательных артефактов
+    Target_tensor = F.relu(spec_torch.values[0].detach())
+    
+    # 2. Инициализация обучаемых параметров (Sc и Производных P)
+    # Сигнал инициируем случайным шумом для поиска структуры
+    Sc_tensor = (torch.rand_like(Target_tensor) * 0.1).requires_grad_(True)
+    
+    # Производные эха
+    P_learn_spec = init_derivatives_window(spec_torch, duration_ms=echo_duration_ms, anchor_pct=anchor_pct)
+    P_learn_vals = P_learn_spec.values[0].clone().detach()
+    Z_learn = _get_zero_index(P_learn_spec.time[0])
+    
+    # Базовая стартовая гипотеза: быстрая атака, медленное затухание
+    P_learn_vals[..., :Z_learn] = 20.0
+    P_learn_vals[..., Z_learn:] = -3.0
+    P_tensor = P_learn_vals.requires_grad_(True)
+
+    # 3. Настройка оптимизатора
+    optimizer = torch.optim.Adam([
+        {'params': Sc_tensor, 'lr': lr_signal}, 
+        {'params': P_tensor, 'lr': lr_echo}   
+    ])
+
+    # Подключаем tqdm, если нужен прогресс-бар
+    if verbose:
+        try:
+            from tqdm.auto import tqdm
+            progress_bar = tqdm(range(num_iterations), desc="Очистка эха (Physics-Informed)")
+        except ImportError:
+            warnings.warn("Модуль tqdm не установлен. Вывод прогресса будет упрощенным.")
+            progress_bar = range(num_iterations)
+    else:
+        progress_bar = range(num_iterations)
         
-    S_tensor = S_tensor.to(device)
-    freq_axis = freq_axis.to(device)
-    time_axis = time_axis.to(device)
-    
-    dt_val, _ = spec.dt
-    sr = 1.0 / dt_val
-    
-    num_freqs, num_times = S_tensor.shape[-2:]
-
-    # Размер окна эха в сэмплах (округляем до нечетного для симметрии)
-    echo_width = int(round((echo_duration_ms / 1000.0) * sr))
-    if echo_width % 2 == 0:
-        echo_width += 1
-    if echo_width < 3:
-        echo_width = 3
-    
-    anchor_idx = echo_width // 2
-
-    # 2. Инициализация обучаемых параметров
-    
-    # Исходная гипотеза: чистый сигнал = наблюдаемый сигнал
-    V_tensor = nn.Parameter(S_tensor.clone().detach())
-    
-    # Гауссово ядро для инициализации эха
-    E_tensor_init = torch.zeros(num_freqs, echo_width, device=device, dtype=S_tensor.dtype)
-    
-    # Временная ось ядра (относительно центра)
-    t_axis = torch.arange(echo_width, device=device) - anchor_idx
-    t_seconds = t_axis * dt_val
-    
-    # 1D гаусс по времени
-    sigma_time = (echo_duration_ms / 1000.0) * gaussian_sigma_ratio
-    gaussian_1d = torch.exp(-0.5 * (t_seconds / sigma_time) ** 2)
-    
-    # Нормируем и применяем ко всем частотам
-    gaussian_norm = gaussian_1d / (gaussian_1d.sum() + 1e-8)
-    for f in range(num_freqs):
-        E_tensor_init[f, :] = gaussian_norm
-    
-    echo_conv_layer = AnchoredConv2D_2DKernel(data=E_tensor_init, zero_index=anchor_idx).to(device)
-    E_tensor_param = echo_conv_layer.data
-
-    # 3. Настройка оптимизатора и функции потерь
-    optimizer = torch.optim.Adam([V_tensor, E_tensor_param], lr=learning_rate)
-    mse_loss = nn.MSELoss()
-    
-    def smoothness_loss_1d(x: torch.Tensor) -> torch.Tensor:
-        """L2 гладкость по временной оси"""
-        diff = x[:, 1:] - x[:, :-1]
-        return torch.mean(diff ** 2)
-    
-    print(f"Запуск деконволюции (гауссово ядро, sigma={sigma_time*1000:.1f}ms)")
-    print(f"  Размер эха: {echo_width} сэмплов, итераций: {num_iterations}")
-    
-    # 4. Цикл оптимизации
-    progress_bar = tqdm(range(num_iterations), desc="Деконволюция эха")
+    # 4. Основной цикл обучения
     for i in progress_bar:
         optimizer.zero_grad()
 
-        # Прямой проход: S_hat = V * E
-        S_hat = echo_conv_layer(V_tensor)
+        # Создаем окно эха из текущих производных
+        P_learn_spec.values = (P_tensor, UREG.hertz)
+        Ec = build_causal_echo_window(P_learn_spec)
 
-        # Расчет потерь
-        loss_reconstruction = mse_loss(S_hat, S_tensor)
-        loss_sparse = lambda_sparsity * torch.mean(torch.abs(V_tensor))
-        loss_smooth_echo = lambda_smooth_echo * smoothness_loss_1d(E_tensor_param)
-        loss_negative = torch.mean(torch.relu(-E_tensor_param)) * 0.1
+        # Сигнал должен быть строго положительным
+        Sc_positive = F.relu(Sc_tensor)
+        Sc = SpecFunc((Sc_positive, S_unit), f_axis, t_axis)
+
+        # Свертка (Предсказание)
+        Pred = convolveTime(Sc, Ec)
+        Pred_tensor = Pred.values[0]
+
+        # Вычисление функции потерь
+        loss_recon = spectral_loss(Pred_tensor, Target_tensor, eps=1e-3)
+        loss_l1 = torch.abs(Sc_positive).mean()
+        loss_p_smooth = torch.diff(P_tensor, dim=1).pow(2).mean()
+
+        total_loss = loss_recon + (lambda_sparsity * loss_l1) + (lambda_smooth_echo * loss_p_smooth)
         
-        total_loss = loss_reconstruction + loss_sparse + loss_smooth_echo + loss_negative
-
-        # Обратное распространение
+        # Шаг оптимизации
         total_loss.backward()
-        
-        # Optional: gradient clipping для стабильности
-        torch.nn.utils.clip_grad_norm_([V_tensor, E_tensor_param], max_norm=1.0)
-        
         optimizer.step()
-        
-        # Принудительная нормировка эха (сохранение энергии)
-        if enforce_energy_conservation:
-            with torch.no_grad():
-                for f in range(num_freqs):
-                    sum_f = E_tensor_param[f, :].sum()
-                    if sum_f > 0:
-                        E_tensor_param[f, :] /= (sum_f + 1e-8)
-        
-        # Обновляем информацию в прогресс-баре
-        if (i + 1) % 10 == 0 or i == num_iterations - 1:
+
+        # =========================================================
+        # ЖЕСТКОЕ ФИЗИЧЕСКОЕ ПРОЕЦИРОВАНИЕ
+        # =========================================================
+        with torch.no_grad():
+            # 1. До якоря (атака): производная обязана быть строго положительной
+            P_tensor[..., :Z_learn].clamp_(min=0.1)
+            
+            # 2. После якоря (затухание): производная обязана быть строго отрицательной
+            P_tensor[..., Z_learn:].clamp_(max=-0.1)
+        # =========================================================
+
+        # Обновление прогресс-бара
+        if verbose and hasattr(progress_bar, 'set_postfix') and ((i + 1) % 10 == 0 or i == num_iterations - 1):
             progress_bar.set_postfix(
-                loss=f"{total_loss.item():.4f}",
-                rec=f"{loss_reconstruction.item():.4f}",
-                sp=f"{loss_sparse.item():.4f}"
+                loss=f"{total_loss.item():.4f}", 
+                recon=f"{loss_recon.item():.4f}",
+                smooth=f"{loss_p_smooth.item():.4f}"
             )
 
-    print(f"Финальная ошибка реконструкции: {loss_reconstruction.item():.6f}")
+    # 5. Сборка финальных результатов
+    # Итоговый очищенный сигнал
+    Sc_final_vals = F.relu(Sc_tensor).detach()
+    clean_spec_torch = SpecFunc((Sc_final_vals, S_unit), f_axis, t_axis)
+    
+    # Итоговый профиль эха среды
+    P_learn_spec.values = (P_tensor.detach(), UREG.hertz)
+    echo_profile_torch = build_causal_echo_window(P_learn_spec)
 
-    # 5. Формирование результирующих объектов SpecFunc
-    V_clean = V_tensor.detach().cpu()
-    E_echo = E_tensor_param.detach().cpu()
-
-    # Создаем новую временную ось для эха, центрированную в 0
-    echo_time_axis = (torch.arange(echo_width) - anchor_idx) * dt_val
-
-    clean_spec = SpecFunc(
-        matrix=(V_clean, S_unit),
-        freq=freq_axis.cpu(),
-        time=time_axis.cpu()
-    )
-
-    echo_profile = SpecFunc(
-        matrix=(E_echo, UREG.dimensionless),
-        freq=freq_axis.cpu(),
-        time=echo_time_axis
-    )
+    # 6. Возврат в исходный фреймворк (Numpy / TF / Torch CPU)
+    clean_spec = clean_spec_torch.to_framework(fw_target, dev_target)
+    echo_profile = echo_profile_torch.to_framework(fw_target, dev_target)
 
     return clean_spec, echo_profile
