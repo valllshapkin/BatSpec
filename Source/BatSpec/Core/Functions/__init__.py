@@ -4,61 +4,30 @@ from jaxtyping import Float, Shaped
 
 # --- 1. Импорты специфичных для проекта библиотек ---
 from BatSpec.Core.Physical.Units import PintUnit, Phisical, UREG, unit_mul
-from BatSpec.Core.Physical.Arrays import TensorLike, convert_to_framework
 from BatSpec.Core.SaveIntegral import SaveIntegral
 
-
+# Внедряем наш новый универсальный фреймворк
+import MultiArray as ma
+from MultiArray import ArrayContext
 
 ArrayLike = Any 
 
-
-def _get_fw_info(tensor: Any) -> tuple[str, Any]:
-    """Определяет фреймворк и устройство тензора."""
-    type_str = str(type(tensor)).lower()
-    
-    # Пытаемся получить устройство. Для NumPy это вернет 'cpu'
-    dev = getattr(tensor, 'device', 'cpu')
-    
-    if 'torch' in type_str: 
-        return 'torch', dev
-    elif 'tensorflow' in type_str: 
-        return 'tensorflow', dev
-    else:
-        return 'numpy', dev
-
-# --- 3. Хелпер для кросс-фреймворковых операций ---
-def _array_sum(tensor: ArrayLike, axis: Union[int, tuple[int, ...]]) -> ArrayLike:
-    """Универсальная функция суммирования для любого фреймворка."""
-    type_str = str(type(tensor)).lower()
-    
-    if 'torch' in type_str:
-        import torch
-        return torch.sum(tensor, dim=axis)
-    elif 'tensorflow' in type_str:
-        import tensorflow as tf
-        return tf.reduce_sum(tensor, axis=axis)
-    else:
-        # Для NumPy, JAX, CuPy и тех, кто соблюдает Array API
-        return tensor.sum(axis=axis)
+# ==========================================
+# БАЗОВЫЕ КЛАССЫ
+# ==========================================
 
 class Function:
     @property
     def _primary_tensor(self) -> ArrayLike:
-        """Возвращает главный тензор объекта для определения фреймворка/устройства."""
+        """Абстрактное свойство: возвращает главный тензор объекта для определения контекста."""
         raise NotImplementedError()
 
     @property
-    def framework(self) -> str:
-        """Возвращает текущий фреймворк данных ('numpy', 'torch', 'tensorflow')."""
-        fw, _ = _get_fw_info(self._primary_tensor)
-        return fw
+    def context(self) -> ArrayContext:
+        """Единый контекст массива (фреймворк, устройство, тип данных)."""
+        return ArrayContext.from_array(self._primary_tensor)
 
-    @property
-    def device(self) -> Any:
-        """Возвращает устройство (device), на котором находятся данные."""
-        _, dev = _get_fw_info(self._primary_tensor)
-        return dev
-    
+
 class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     _value_a: Shaped[ArrayLike, '... x']
     _value_u: PintUnit
@@ -83,14 +52,15 @@ class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
 
     def _SaveIntegral_Energy(self) -> Phisical[Shaped[ArrayLike, '...']]:
         dA, dU = self._d_axis__a
-        # Заменено torch.sum на универсальный хелпер
-        integral = _array_sum(self._value_a**2, axis=-1) * dA
+        # Безопасно для комплексных и вещественных чисел: |A|^2
+        energy_tensor = ma.abs(self._value_a) ** 2
+        integral = ma.sum(energy_tensor, axis=-1) * dA
         return integral, unit_mul(self._value_u, self._value_u, dU)
 
     def _SaveIntegral_Area(self) -> Phisical[Shaped[ArrayLike, '...']]:
         dA, dU = self._d_axis__a
-        integral = _array_sum(self._value_a, axis=-1) * dA
-        return integral, unit_mul(self._value_u, dU), 
+        integral = ma.sum(self._value_a, axis=-1) * dA
+        return integral, unit_mul(self._value_u, dU)
 
     def _FileSystem_Save(self, path: Path) -> None:
         raise NotImplementedError()
@@ -116,19 +86,14 @@ class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
         for i in range(len(self)):
             yield self[i]
 
-    def to_framework(self, framework: Union[str, Any], device: Union[str, Any] = None) -> 'Function1D':
-        """
-        Конвертирует внутренние тензоры в указанный фреймворк и устройство.
-        Возвращает новый экземпляр того же класса (Function1D, TimeFunc или FreqFunc).
-        """
-        new_value_a = convert_to_framework(self._value_a, framework, device)
-        new_axis__a = convert_to_framework(self._axis__a, framework, device)
-
+    def to_context(self, ctx: ArrayContext) -> 'Function1D':
+        """Новый стандартный метод миграции данных."""
+        new_value_a = ma.convert_to(self._value_a, ctx)
+        new_axis__a = ma.convert_to(self._axis__a, ctx)
         return Function1D(
             values=(new_value_a, self._value_u), 
             axis=(new_axis__a, self._axis__u)
         )
- 
 
 class TimeFunc(Function1D):
     _axis__u: PintUnit = UREG.second
@@ -194,9 +159,8 @@ class TimeFunc(Function1D):
         for i in range(len(self)):
             yield self[i]
 
-    def to_framework(self, framework: Union[str, Any], device: Union[str, Any] = None) -> 'TimeFunc':
-        return TimeFunc.from_Function1D(Function1D.to_framework(self, framework, device=device))
-
+    def to_context(self, ctx: ArrayContext) -> 'TimeFunc':
+        return TimeFunc.from_Function1D(Function1D.to_context(self, ctx))
 
 
 class FreqFunc(Function1D):
@@ -258,9 +222,8 @@ class FreqFunc(Function1D):
         for i in range(len(self)):
             yield self[i]
     
-    def to_framework(self, framework: Union[str, Any], device: Union[str, Any] = None) -> 'FreqFunc':
-        return FreqFunc.from_Function1D(Function1D.to_framework(self, framework, device=device))
-
+    def to_context(self, ctx: ArrayContext) -> 'FreqFunc':
+        return FreqFunc.from_Function1D(Function1D.to_context(self, ctx))
 
 
 class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
@@ -273,7 +236,7 @@ class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
 
     @property
     def _primary_tensor(self) -> ArrayLike:
-        return self._matrx_a  # Ориентируемся по 2D матрице
+        return self._matrx_a
 
     def __init__(self, 
                  matrix: Phisical[Shaped[ArrayLike, '... x y']], 
@@ -300,13 +263,15 @@ class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     def _SaveIntegral_Area(self) -> Phisical[Shaped[ArrayLike, '...']]:
         f_da, f_du = self._d_first_a
         s_da, s_du = self._d_sec___a
-        integral = _array_sum(self._matrx_a, axis=(-2, -1)) * f_da * s_da
+        integral = ma.sum(self._matrx_a, axis=(-2, -1)) * f_da * s_da
         return integral, unit_mul(self._matrx_u, f_du, s_du)
     
     def _SaveIntegral_Energy(self) -> Phisical[Shaped[ArrayLike, '...']]:
         f_da, f_du = self._d_first_a
         s_da, s_du = self._d_sec___a
-        integral = _array_sum(self._matrx_a ** 2, axis=(-2, -1)) * f_da * s_da
+        # Безопасно для комплексных спектрограмм: |Z|^2
+        energy_tensor = ma.abs(self._matrx_a) ** 2
+        integral = ma.sum(energy_tensor, axis=(-2, -1)) * f_da * s_da
         return integral, unit_mul(self._matrx_u, self._matrx_u, f_du, s_du)
 
     def _FileSystem_Save(self, path: Path) -> None:
@@ -334,14 +299,10 @@ class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
         for i in range(len(self)):
             yield self[i]
 
-    def to_framework(self, framework: Union[str, Any], device: Union[str, Any] = None) -> 'Function2D':
-        """
-        Конвертирует внутренние тензоры в указанный фреймворк и устройство.
-        Возвращает новый экземпляр того же класса (Function2D или SpecFunc).
-        """
-        new_matrx = convert_to_framework(self._matrx_a, framework, device)
-        new_first = convert_to_framework(self._first_a, framework, device)
-        new_sec   = convert_to_framework(self._sec___a, framework, device)
+    def to_context(self, ctx: ArrayContext) -> 'Function2D':
+        new_matrx = ma.convert_to(self._matrx_a, ctx)
+        new_first = ma.convert_to(self._first_a, ctx)
+        new_sec   = ma.convert_to(self._sec___a, ctx)
 
         return Function2D(
             matrix=(new_matrx, self._matrx_u),
@@ -424,7 +385,7 @@ class SpecFunc(Function2D):
 
     def integrateOverTime(self) -> FreqFunc:
         dt_value, dt_unit = self.dt
-        integrated_values = _array_sum(self._matrx_a, axis=-1) * dt_value
+        integrated_values = ma.sum(self._matrx_a, axis=-1) * dt_value
         new_unit = unit_mul(self._matrx_u, dt_unit)
         return FreqFunc(
             values=(integrated_values, new_unit),
@@ -433,7 +394,7 @@ class SpecFunc(Function2D):
 
     def integrateOverFreq(self) -> TimeFunc:
         df_value, df_unit = self.df
-        integrated_values = _array_sum(self._matrx_a, axis=-2) * df_value
+        integrated_values = ma.sum(self._matrx_a, axis=-2) * df_value
         new_unit = unit_mul(self._matrx_u, df_unit)
         return TimeFunc(
             values=(integrated_values, new_unit),
@@ -454,6 +415,5 @@ class SpecFunc(Function2D):
         for i in range(len(self)):
             yield self[i]
 
-    def to_framework(self, framework: Union[str, Any], device: Union[str, Any] = None) -> 'SpecFunc':
-        return SpecFunc.from_Function2D(Function2D.to_framework(self, framework, device=device))
-
+    def to_context(self, ctx: ArrayContext) -> 'SpecFunc':
+        return SpecFunc.from_Function2D(Function2D.to_context(self, ctx))
