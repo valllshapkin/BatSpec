@@ -1,72 +1,16 @@
-from typing import Any
-from jaxtyping import Float
+from jaxtyping import Float, ArrayLike
 
-# --- Межфреймворковые хелперы ---
-
-def _array_full_like(x: Any, fill_value: float) -> Any:
-    """Создает массив/тензор формы как у x, заполненный значением fill_value."""
-    type_str = str(type(x)).lower()
-    if 'torch' in type_str:
-        import torch
-        return torch.full_like(x, fill_value)
-    elif 'tensorflow' in type_str:
-        import tensorflow as tf
-        return tf.fill(tf.shape(x), fill_value)
-    else:
-        import numpy as np
-        return np.full_like(x, fill_value)
-
-def _array_clamp_min(x: Any, min_val: float) -> Any:
-    """Ограничивает значения в массиве/тензоре снизу."""
-    type_str = str(type(x)).lower()
-    if 'torch' in type_str:
-        import torch
-        return torch.clamp(x, min=min_val)
-    elif 'tensorflow' in type_str:
-        import tensorflow as tf
-        return tf.maximum(x, min_val)
-    else:
-        import numpy as np
-        return np.clip(x, a_min=min_val, a_max=None)
-        
-def _array_exp(x: Any) -> Any:
-    """Вычисляет экспоненту для каждого элемента."""
-    type_str = str(type(x)).lower()
-    if 'torch' in type_str:
-        import torch
-        return torch.exp(x)
-    elif 'tensorflow' in type_str:
-        import tensorflow as tf
-        return tf.exp(x)
-    else:
-        import numpy as np
-        return np.exp(x)
-
-def _array_expand_dims(x: Any, axis: int) -> Any:
-    """Добавляет новое измерение в массив/тензор."""
-    type_str = str(type(x)).lower()
-    if 'torch' in type_str:
-        return x.unsqueeze(axis)
-    elif 'tensorflow' in type_str:
-        import tensorflow as tf
-        return tf.expand_dims(x, axis)
-    else:
-        import numpy as np
-        return np.expand_dims(x, axis)
-
-
-# --- Основной код ---
-
-ArrayLike = Any
-
-# Подставьте ваши актуальные пути импортов
+# --- 1. Импорты специфичных для проекта библиотек ---
 from BatSpec.Core.Physical.Units import UREG, unit_mul, unit_devide
 from BatSpec.Core.Functions import TimeFunc, FreqFunc, SpecFunc
 from BatSpec.Core.Spectral import makeComplexSpec, inverseComplexSpec
 from BatSpec.Core.ConvWindow import Window, TEST_HANN_WINODW
 
+# --- 2. Внедряем наш новый универсальный фреймворк ---
+import MultiArray as ma
+
 # =====================================================================
-# 1. Аналитические модели приборов (теперь фреймворк-агностичные)
+# 1. Аналитические модели приборов (теперь с MultiArray)
 # =====================================================================
 
 class CalibrationModel:
@@ -76,6 +20,7 @@ class CalibrationModel:
         raise NotImplementedError
 
     def generate_calibration_curve(self, freq_axis: Float[ArrayLike, 'freq']) -> FreqFunc:
+        """Создает калибровочную кривую в том же фреймворке, что и входная ось частот."""
         coef_values = self(freq_axis)
         unit_pa_per_fs = unit_devide(UREG.Pa, UREG.FS)
         return FreqFunc(values=(coef_values, unit_pa_per_fs), axis=freq_axis)
@@ -86,7 +31,8 @@ class FlatResponseModel(CalibrationModel):
         self.sensitivity_pa = sensitivity_pa
 
     def __call__(self, freq_hz: Float[ArrayLike, 'freq']) -> Float[ArrayLike, 'freq']:
-        return _array_full_like(freq_hz, self.sensitivity_pa)
+        ctx = ma.ArrayContext.from_array(freq_hz)
+        return ma.full(freq_hz.shape, self.sensitivity_pa, ctx)
 
 
 class PetterssonM500Model(CalibrationModel):
@@ -97,7 +43,7 @@ class PetterssonM500Model(CalibrationModel):
         self.rolloff_rate     = rolloff_rate
 
     def __call__(self, freq_hz: Float[ArrayLike, 'freq']) -> Float[ArrayLike, 'freq']:
-        boost = _array_clamp_min(freq_hz - self.rolloff_start_hz, 0.0) * self.rolloff_rate
+        boost = ma.clamp_min(freq_hz - self.rolloff_start_hz, 0.0) * self.rolloff_rate
         return self.base_pa_per_fs + boost
 
 
@@ -111,7 +57,7 @@ class ResonanceMicModel(CalibrationModel):
 
     def __call__(self, freq_hz: Float[ArrayLike, 'freq']) -> Float[ArrayLike, 'freq']:
         exponent   = -0.5 * ((freq_hz - self.resonance_hz) / self.resonance_width_hz) ** 2
-        resonance  = self.resonance_depth_pa * _array_exp(exponent)
+        resonance  = self.resonance_depth_pa * ma.exp(exponent)
         return self.base_pa - resonance
 
 
@@ -127,7 +73,7 @@ def applyСalibration(signal_fs: TimeFunc,
     """
     Переводит сырой цифровой сигнал (FS) в физические Паскали (Pa),
     учитывая частотно-зависимую калибровку (АЧХ) прибора.
-    Работает с NumPy, PyTorch, TensorFlow.
+    Работает с NumPy, PyTorch, TensorFlow и другими фреймворками.
     """
     _, signal_u = signal_fs.values
     if not signal_u.is_compatible_with(UREG.FS):
@@ -140,8 +86,9 @@ def applyСalibration(signal_fs: TimeFunc,
     spec_matrix, spec_u = complex_spec.values  # Форма: (... freq time)
     coef_vector, coef_u = calib_curve.values   # Форма: (freq)
 
-    # Применяем универсальный хелпер для добавления измерения
-    coef_vector_broadcasted = _array_expand_dims(coef_vector, axis=-1)
+    # Добавляем измерение для broadcast'инга с помощью ma.reshape: (freq) -> (freq, 1)
+    new_shape = coef_vector.shape + (1,)
+    coef_vector_broadcasted = ma.reshape(coef_vector, new_shape)
     
     # Broadcasting (умножение (... freq time) на (freq, 1)) работает одинаково во всех фреймворках
     calibrated_matrix = spec_matrix * coef_vector_broadcasted

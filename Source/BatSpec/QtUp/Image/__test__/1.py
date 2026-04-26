@@ -27,8 +27,8 @@ plot_item.addItem(img_item)
 img_item.attachTo(plot_item)
 
 # Генерируем массив 600×100000
-n_freq = 600          # строки (например, частоты)
-n_time = 100000        # столбцы (например, время)
+n_freq = 300          # строки (например, частоты)
+n_time = 37644        # столбцы (например, время)
 # Данные: случайный шум + слабая структура для наглядности
 np.random.seed(42)
 data = np.random.randn(n_freq, n_time).astype(np.float32)

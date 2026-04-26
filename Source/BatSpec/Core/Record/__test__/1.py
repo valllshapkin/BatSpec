@@ -12,9 +12,6 @@ print(SaveIntegral.Energy(record))
 record = applyСalibration(record, FlatResponseModel(sensitivity_pa=20))
 print(SaveIntegral.Energy(record))
 
-# from BatSpec.QtApp.Visualize import update_function, update_spec2d, run_visualizer
-# update_function("record", record)
-# run_visualizer()
 
 
 

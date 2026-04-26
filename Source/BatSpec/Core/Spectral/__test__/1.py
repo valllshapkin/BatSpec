@@ -1,88 +1,113 @@
 from pathlib import Path
-
-from BatSpec.Core.Functions import SpecFunc, TimeFunc
-from BatSpec.Core.Spectral.Echo import deconvolveEcho
 ScriptDir = Path(__file__).parent
+import time
+import numpy as np
+
 from BatSpec.Core.ConvWindow import TEST_HANN_WINODW
 from BatSpec.Core.Record import loadRecord, correctDC
 from BatSpec.Core.Record.Calibration import FlatResponseModel, applyСalibration
 from BatSpec.Core.SaveIntegral import SaveIntegral
-from BatSpec.Core.Spectral import makeSpec, makeLogDB, interpolateByFactors, blurSpec, highPassSpec
-from BatSpec.Core.Spectral.Statistic import noiseZNormByFreq
-from BatSpec.Core.Spectral.Saprse.second import discover_best_pattern_with_callback
-from BatSpec.Core.Spectral.Echo.Blind import deconvolve_echo_wiener_style
-from 
+from BatSpec.Core.Spectral import makeSpec, makeLogDB, DSPContext
+from BatSpec.Core.Functions import TimeFunc, SpecFunc
+from BatSpec.Core.Physical.Units import UREG
 from BatSpec.Visualize import update_function, update_spec2d, run_visualizer
+
+from MultiArray.Core import ArrayContext, Framework, DeviceType
+
+
+def warmup_gpu():
+    """Функция для инициализации драйверов CUDA/XLA перед замерами времени."""
+    print("--- Прогрев GPU (Инициализация CUDA) ---")
+    
+    # Генерируем 1 секунду шума
+    dummy_sr = 48000
+    dummy_time = np.linspace(0, 1.0, dummy_sr)
+    dummy_vals = np.random.randn(dummy_sr).astype(np.float32)
+    dummy_sig = TimeFunc(values=(dummy_vals, UREG.FS), axis=dummy_time)
+    
+    ctx_tf = ArrayContext(Framework.TENSORFLOW, DeviceType.GPU, None)
+    ctx_torch = ArrayContext(Framework.TORCH, DeviceType.GPU, None)
+    
+    try:
+        t0 = time.time()
+        with DSPContext(ctx_torch):
+            makeSpec(dummy_sig, TEST_HANN_WINODW, overlap=0.5, bins=100)
+        print(f"Torch GPU прогрет за {time.time() - t0:.3f} сек")
+    except Exception as e:
+        print("Torch недоступен или ошибка прогрева:", e)
+        
+    try:
+        t0 = time.time()
+        with DSPContext(ctx_tf):
+            makeSpec(dummy_sig, TEST_HANN_WINODW, overlap=0.5, bins=100)
+        print(f"TF GPU прогрет за {time.time() - t0:.3f} сек")
+    except Exception as e:
+        print("TF недоступен или ошибка прогрева:", e)
+        
+    print("----------------------------------------\n")
+
 
 @run_visualizer
 def main():
-        
+    # 1. Прогрев бэкендов
+    warmup_gpu()
+    
     record = loadRecord(ScriptDir / "MYODAS_20230624_004924.wav")
-    record = correctDC(record)
-    print(SaveIntegral.Energy(record))
+    
+    # Контексты
+    ctx_np_cpu = ArrayContext(Framework.NUMPY, DeviceType.CPU, None)
+    ctx_tf_gpu = ArrayContext(Framework.TENSORFLOW, DeviceType.GPU, None)
+    ctx_torch_gpu = ArrayContext(Framework.TORCH, DeviceType.GPU, None)
+    
+    print("--- Основные вычисления ---")
+    
+    # 1. NumPy
+    t0 = time.time()
+    with DSPContext(ctx_np_cpu):
+        spec_np = makeSpec(record, TEST_HANN_WINODW, overlap=0.8, bins=300)
+    print(f"NumPy STFT: {time.time() - t0:.3f} сек")
+    update_spec2d("1. NumPy", makeLogDB(spec_np, add_one=False))
+    
+    # 2. PyTorch GPU
+    t0 = time.time()
+    with DSPContext(ctx_torch_gpu):
+        spec_torch = makeSpec(record, TEST_HANN_WINODW, overlap=0.8, bins=300)
+    print(f"Torch GPU STFT: {time.time() - t0:.3f} сек")
+    update_spec2d("2. PyTorch", makeLogDB(spec_torch, add_one=False))
 
-    record = applyСalibration(record, FlatResponseModel(sensitivity_pa=20))
-    print(SaveIntegral.Energy(record))
-    update_function("record", record)
+    # 3. TensorFlow GPU
+    t0 = time.time()
+    with DSPContext(ctx_tf_gpu):
+        spec_tf = makeSpec(record, TEST_HANN_WINODW, overlap=0.8, bins=300)
+    print(f"TF GPU STFT: {time.time() - t0:.3f} сек")
+    update_spec2d("3. TensorFlow", makeLogDB(spec_tf, add_one=False))
 
-    spec = makeSpec(record, TEST_HANN_WINODW, overlap=0.8, bins=300)
-    print(spec.values[0].shape, spec.values[1])
+    # 4. Сборка гибридной спектрограммы
+    # Так как makeSpec возвращает объекты в исходном контексте (тут это NumPy),
+    # мы можем спокойно использовать классический np.maximum!
+    mat_tf, u = spec_tf.values
+    mat_torch, _ = spec_torch.values
 
-    zspec = noiseZNormByFreq(spec, noise_percentile=10)
-    update_spec2d("zspec", makeLogDB(zspec, add_one=True))
+    print(f'''
+DEBUG SHAPE: spec_tf.values[0].shape = {spec_tf.values[0].shape}
+DEBUG SHAPE: spec_tf.time[0].shape = {spec_tf.time[0].shape}
+DEBUG SHAPE: spec_tf.freq[0].shape = {spec_tf.freq[0].shape}
 
-    # high_pass = highPassSpec(zspec, sigma = 1)
-    # update_spec2d("high_pass", makeLogDB(high_pass, add_one=True))
+DEBUG SHAPE: spec_torch.values[0].shape = {spec_torch.values[0].shape}
+DEBUG SHAPE: spec_torch.time[0].shape = {spec_torch.time[0].shape}
+DEBUG SHAPE: spec_torch.freq[0].shape = {spec_torch.freq[0].shape}
 
-    # zblur = blurSpec(zspec, sigma=(4, 4))
-    # update_spec2d("zblur", makeLogDB(zblur, add_one=True))
-
-    # low = interpolateByFactors(zblur, (0.4, 0.4))
-    # update_spec2d("low", makeLogDB(low, add_one=True))
-
-
-    # Предполагается, что у вас есть функции:
-    # def update_spec2d(name: str, spec: SpecFunc): ...
-    # def update_function(name: str, func: TimeFunc): ...
-    # def makeLogDB(spec, add_one): ...
-    # low: SpecFunc = ...
-
-    # def my_visualizer_callback(a: SpecFunc, b: SpecFunc):
-    #     update_spec2d("a", makeLogDB(a))
-    #     update_spec2d("b", makeLogDB(b))
-
-    # deconvolve_echo_wiener_style(
-    #     interpolateByFactors(spec, (0.5, 0.5)),
-    #     echo_duration_limit_ms=50,
-    #     epochs=1000,
-    #     learning_rate=0.01,
-    #     lambda_sparsity=0.05,
-    #     lambda_echo_decay=10,
-    #     lambda_echo_positivity=0.5,
-    #     device="cuda",
-    #     callback=my_visualizer_callback,
-    #     callback_interval_percent=1
-    # )
-
-
-    # # Запуск основной функции
-    # discover_best_pattern_with_callback(
-    #     spec=low,
-    #     window_duration_ms=1500.0, # 150 сэмплов при dt=10ms
-    #     anchor_freq_percent=70.0,  # Ожидаем его вверху
-    #     anchor_time_percent=50.0,  # Ожидаем его в центре окна
-    #     epochs=150,
-    #     learning_rate=0.05,
-    #     top_k_peaks=15,
-    #     lambda_tv=0.001,
-    #     lambda_center=0.2, # Увеличим вес, чтобы якоря работали надежнее
-    #     callback=my_visualizer_callback,
-    #     callback_interval_percent=20.0
-
-    # )
-
-    print("Обучение завершено.")
-
-
-    # update_spec2d("low", makeLogDB(low))
-    # update_spec2d("A", makeLogDB(A))
+DEBUG SHAPE: spec_np.values[0].shape = {spec_np.values[0].shape}
+DEBUG SHAPE: spec_np.time[0].shape = {spec_np.time[0].shape}
+DEBUG SHAPE: spec_np.freq[0].shape = {spec_np.freq[0].shape}
+''')
+    
+    mat_max = np.maximum(mat_tf, mat_torch)
+    
+    spec_hybrid = SpecFunc(
+        matrix=(mat_max, u), 
+        freq=spec_tf.freq[0], 
+        time=spec_tf.time[0]
+    )
+    
+    update_spec2d("4. Hybrid (TF max Torch)", makeLogDB(spec_hybrid, add_one=False))

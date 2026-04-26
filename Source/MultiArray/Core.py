@@ -11,7 +11,7 @@ class Framework(enum.Enum):
     TORCH = "torch"
     TENSORFLOW = "tensorflow"
     JAX = "jax"
-    CUPY = "cupy"
+    CUPY = "cupy"    
 
 class DeviceType(enum.Enum):
     CPU = "cpu"
@@ -23,7 +23,7 @@ class DeviceType(enum.Enum):
 
 StubFW = Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:   
     import numpy
     import torch
     import tensorflow as tf

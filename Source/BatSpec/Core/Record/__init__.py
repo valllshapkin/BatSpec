@@ -1,14 +1,21 @@
 from pathlib import Path
 from typing import Optional
 import numpy as np
+from math import gcd
 
+# --- 1. Импорты специфичных для проекта библиотек ---
 from BatSpec.Core.Physical.Units import UREG, PintUnit
 from BatSpec.Core.Functions import TimeFunc
+
+# --- 2. Внедряем наш новый универсальный фреймворк ---
+import MultiArray as ma
+
 
 def loadRecord(path: Path, unit: PintUnit = UREG.FS) -> 'TimeFunc':
     """
     Загружает аудиофайл как TimeFunc (mono, float64).
-    По умолчанию возвращает объект на базе NumPy массивов.
+    По умолчанию возвращает объект на базе NumPy массивов, так как soundfile работает с NumPy.
+    Далее пользователь может перевести объект в любой контекст через .to_context().
     """
     import soundfile as sf  # type: ignore
 
@@ -40,12 +47,12 @@ def trimRecord(signal: 'TimeFunc',
                t_end: Optional[float] = None) -> 'TimeFunc':
     """
     Обрезает запись по времени (в секундах). Поддерживает батчи.
-    Работает с любым фреймворком (NumPy, PyTorch, TF).
+    Работает с любым фреймворком (NumPy, PyTorch, TF, JAX, CuPy).
     """
     if t_start < 0:
         raise ValueError("t_start не может быть отрицательным")
 
-    time_array, time_unit = signal.time
+    time_array, _ = signal.time
     value_array, value_unit = signal.values
 
     if t_end is None:
@@ -57,11 +64,17 @@ def trimRecord(signal: 'TimeFunc',
     # Создаем маску. Операторы >=, <= и & работают одинаково во всех фреймворках
     mask = (time_array >= t_start) & (time_array <= t_end)
     
-    # Метод .any() поддерживается и в numpy, и в torch
-    if not mask.any():
+    # Проверяем, есть ли хоть один элемент в маске (фреймворк-агностично)
+    ctx = ma.ArrayContext.from_array(mask)
+    if ctx.isTensorflow():
+        any_result = ctx.fw.reduce_any(mask)
+    else: # .any() работает для numpy, torch, jax, cupy
+        any_result = mask.any()
+        
+    if not any_result:
         raise ValueError(f"Интервал [{t_start}, {t_end}] не пересекается с сигналом")
 
-    # Обрезаем массивы (слайсинг работает везде одинаково)
+    # Обрезаем массивы (булево индексирование работает везде одинаково)
     new_time = time_array[mask]
     new_values = value_array[..., mask]
 
@@ -77,7 +90,6 @@ def resampleRecord(signal: 'TimeFunc', new_sr: int) -> 'TimeFunc':
     Автоматически сохраняет фреймворк и устройство исходного сигнала.
     """
     from scipy.signal import resample_poly  # type: ignore
-    from math import gcd
 
     if new_sr <= 0:
         raise ValueError("new_sr должен быть положительным целым числом")
@@ -86,70 +98,62 @@ def resampleRecord(signal: 'TimeFunc', new_sr: int) -> 'TimeFunc':
     if orig_sr == new_sr:
         return signal
 
-    # 1. Запоминаем исходный фреймворк и девайс
-    orig_tensor = signal.values[0]
-    type_str = str(type(orig_tensor)).lower()
+    # 1. Запоминаем исходный контекст (фреймворк, девайс, dtype)
+    original_ctx = signal.context
     
-    if 'torch' in type_str: fw_target = 'torch'
-    elif 'tensorflow' in type_str: fw_target = 'tensorflow'
-    else: fw_target = 'numpy'
+    # 2. Создаем контекст NumPy для работы с SciPy
+    numpy_ctx = ma.ArrayContext(ma.Framework.NUMPY, ma.DeviceType.CPU, None)
     
-    device_target = getattr(orig_tensor, 'device', None)
-
-    # 2. Переводим сигнал в NumPy, так как scipy работает только с ним
-    sig_np = signal.to_framework('numpy')
-    v_np, V_unit = sig_np.values
-    t_np, T_unit = sig_np.time
+    # 3. Переводим сигнал в NumPy с помощью to_context
+    signal_np = signal.to_context(numpy_ctx)
+    v_np, v_unit = signal_np.values
+    t_np, _ = signal_np.time
 
     g = gcd(orig_sr, new_sr)
     up = new_sr // g
     down = orig_sr // g
 
-    # 3. Выполняем ресэмплинг (NumPy)
+    # 4. Выполняем ресэмплинг (NumPy)
     new_v_np = resample_poly(v_np, up=up, down=down, axis=-1)
-
     new_length = new_v_np.shape[-1]
     new_dt = 1.0 / new_sr
     new_t_np = np.arange(new_length, dtype=t_np.dtype) * new_dt
 
-    # 4. Собираем временный NumPy-объект
-    sig_resampled = TimeFunc(
-        values=(new_v_np, V_unit),
+    # 5. Собираем временный NumPy-объект
+    resampled_signal_np = TimeFunc(
+        values=(new_v_np, v_unit),
         axis=new_t_np
     )
 
-    # 5. Возвращаем в исходный фреймворк и устройство!
-    return sig_resampled.to_framework(fw_target, device=device_target)
+    # 6. Возвращаем в исходный контекст!
+    return resampled_signal_np.to_context(original_ctx)
 
 
 def correctDC(f: TimeFunc) -> TimeFunc:
     """
     Удаляет смещение постоянного тока (DC offset), вычитая медиану.
-    Фреймворк-агностично.
+    Работает с любым фреймворком.
     """
-    v, V = f.values
+    v, v_unit = f.values
     t, _ = f.time
     
-    type_str = str(type(v)).lower()
-
-    # Считаем медиану в зависимости от фреймворка
-    if 'torch' in type_str:
-        import torch
+    ctx = f.context
+    
+    if ctx.isTorch():
         # В PyTorch median возвращает namedtuple (values, indices)
-        med = torch.median(v, dim=-1, keepdim=True).values
-    elif 'tensorflow' in type_str:
-        # У TF нет простой функции median для тензоров без TFP, 
-        # поэтому безопасно перекинем в numpy и обратно
-        import tensorflow as tf
-        med_np = np.median(v.numpy(), axis=-1, keepdims=True)
-        med = tf.convert_to_tensor(med_np, dtype=v.dtype)
-    else:
-        # Для NumPy и всех остальных
-        med = np.median(v, axis=-1, keepdims=True)
+        med = ctx.fw.median(v, dim=-1, keepdim=True).values
+    elif ctx.isTensorflow():
+        # У TF нет простой функции median, поэтому используем NumPy как надёжный fallback
+        v_np = ma.to_numpy(v)
+        med_np = np.median(v_np, axis=-1, keepdims=True)
+        med = ma.convert_to(med_np, ctx)
+    else: # NumPy, Jax, Cupy
+        # У этих фреймворков median - это функция модуля, а не метод тензора
+        med = ctx.fw.median(v, axis=-1, keepdims=True)
         
     corrected_values = v - med
     
     return TimeFunc(
-        values=(corrected_values, V),
-        axis=t # Передаем ось времени как есть
+        values=(corrected_values, v_unit),
+        axis=t
     )
