@@ -17,8 +17,6 @@ def run_visualizer(worker_func, *args, **kwargs):
         app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    # Импортируем окна здесь
-
     # 2. Создаем и показываем окна
     # Важно: сохраняем ссылки (window1, window2), чтобы сборщик мусора их не удалил
     window2 = Function1DVisualizer()

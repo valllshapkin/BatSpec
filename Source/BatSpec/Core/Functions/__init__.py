@@ -36,7 +36,7 @@ class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
 
     @property
     def _primary_tensor(self) -> ArrayLike:
-        return self._value_a  # Ориентируемся по главному массиву значений
+        return self._value_a
 
     def __init__(self, values: Phisical[Shaped[ArrayLike, '... x']], axis: Phisical[Float[ArrayLike, "axis"]]):
         self._value_a, self._value_u = values
@@ -46,13 +46,11 @@ class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     def _d_axis__a(self) -> Phisical[float]:
         if len(self._axis__a) < 2:
             raise ValueError("Cannot calculate step size for an AnyArray with less than 2 elements.")
-        # Приведение к float работает корректно для скалярных тензоров во всех фреймворках
         step = float((self._axis__a[-1] - self._axis__a[0]) / (len(self._axis__a) - 1))
         return step, self._axis__u
 
     def _SaveIntegral_Energy(self) -> Phisical[Shaped[ArrayLike, '...']]:
         dA, dU = self._d_axis__a
-        # Безопасно для комплексных и вещественных чисел: |A|^2
         energy_tensor = ma.abs(self._value_a) ** 2
         integral = ma.sum(energy_tensor, axis=-1) * dA
         return integral, unit_mul(self._value_u, self._value_u, dU)
@@ -89,11 +87,49 @@ class Function1D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     def to_context(self, ctx: ArrayContext) -> 'Function1D':
         """Новый стандартный метод миграции данных."""
         new_value_a = ma.convert_to(self._value_a, ctx)
-        new_axis__a = ma.convert_to(self._axis__a, ctx)
+        
+        # ИСПРАВЛЕНИЕ АРХИТЕКТУРЫ: Оси не должны перенимать dtype матрицы (особенно если матрица комплексная).
+        # Передавая None в dtype, мы заставляем фреймворк сохранить естественный (вещественный) тип оси.
+        axis_ctx = ArrayContext(ctx._framework, ctx._device, None)
+        new_axis__a = ma.convert_to(self._axis__a, axis_ctx)
+        
         return Function1D(
             values=(new_value_a, self._value_u), 
             axis=(new_axis__a, self._axis__u)
         )
+
+    # ==========================================
+    # Математические операторы (Math Overloads)
+    # ==========================================
+
+    def _math_op(self, other: Any, op: Callable, unit_op: Callable = None) -> Self:
+        if isinstance(other, Function1D):
+            new_val = op(self._value_a, other._value_a)
+            new_u = unit_op(self._value_u, other._value_u) if unit_op else self._value_u
+        else:
+            new_val = op(self._value_a, other)
+            new_u = self._value_u
+            
+        base = Function1D(
+            values=(new_val, new_u), 
+            axis=(self._axis__a, self._axis__u)
+        )
+        if type(self) is Function1D:
+            return base
+        return type(self).from_Function1D(base)
+
+    def __add__(self, other): return self._math_op(other, lambda a, b: a + b)
+    def __radd__(self, other): return self._math_op(other, lambda a, b: b + a)
+    
+    def __sub__(self, other): return self._math_op(other, lambda a, b: a - b)
+    def __rsub__(self, other): return self._math_op(other, lambda a, b: b - a)
+    
+    def __mul__(self, other): return self._math_op(other, lambda a, b: a * b, lambda u1, u2: u1 * u2)
+    def __rmul__(self, other): return self._math_op(other, lambda a, b: b * a, lambda u1, u2: u2 * u1)
+    
+    def __truediv__(self, other): return self._math_op(other, lambda a, b: a / b, lambda u1, u2: u1 / u2)
+    def __rtruediv__(self, other): return self._math_op(other, lambda a, b: b / a, lambda u1, u2: u2 / u1)
+
 
 class TimeFunc(Function1D):
     _axis__u: PintUnit = UREG.second
@@ -269,7 +305,6 @@ class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
     def _SaveIntegral_Energy(self) -> Phisical[Shaped[ArrayLike, '...']]:
         f_da, f_du = self._d_first_a
         s_da, s_du = self._d_sec___a
-        # Безопасно для комплексных спектрограмм: |Z|^2
         energy_tensor = ma.abs(self._matrx_a) ** 2
         integral = ma.sum(energy_tensor, axis=(-2, -1)) * f_da * s_da
         return integral, unit_mul(self._matrx_u, self._matrx_u, f_du, s_du)
@@ -301,14 +336,50 @@ class Function2D(Function, SaveIntegral[Phisical[Shaped[ArrayLike, '...']]]):
 
     def to_context(self, ctx: ArrayContext) -> 'Function2D':
         new_matrx = ma.convert_to(self._matrx_a, ctx)
-        new_first = ma.convert_to(self._first_a, ctx)
-        new_sec   = ma.convert_to(self._sec___a, ctx)
+        
+        # ИСПРАВЛЕНИЕ АРХИТЕКТУРЫ: Изолируем оси от комплексного типа матрицы
+        axis_ctx = ArrayContext(ctx._framework, ctx._device, None)
+        new_first = ma.convert_to(self._first_a, axis_ctx)
+        new_sec   = ma.convert_to(self._sec___a, axis_ctx)
 
         return Function2D(
             matrix=(new_matrx, self._matrx_u),
             first=(new_first, self._first_u),
             sec=(new_sec, self._sec___u)
         )
+
+    # ==========================================
+    # Математические операторы (Math Overloads)
+    # ==========================================
+
+    def _math_op(self, other: Any, op: Callable, unit_op: Callable = None) -> Self:
+        if isinstance(other, Function2D):
+            new_mat = op(self._matrx_a, other._matrx_a)
+            new_u = unit_op(self._matrx_u, other._matrx_u) if unit_op else self._matrx_u
+        else:
+            new_mat = op(self._matrx_a, other)
+            new_u = self._matrx_u
+            
+        base = Function2D(
+            matrix=(new_mat, new_u), 
+            first=(self._first_a, self._first_u), 
+            sec=(self._sec___a, self._sec___u)
+        )
+        if type(self) is Function2D:
+            return base
+        return type(self).from_Function2D(base)
+
+    def __add__(self, other): return self._math_op(other, lambda a, b: a + b)
+    def __radd__(self, other): return self._math_op(other, lambda a, b: b + a)
+    
+    def __sub__(self, other): return self._math_op(other, lambda a, b: a - b)
+    def __rsub__(self, other): return self._math_op(other, lambda a, b: b - a)
+    
+    def __mul__(self, other): return self._math_op(other, lambda a, b: a * b, lambda u1, u2: u1 * u2)
+    def __rmul__(self, other): return self._math_op(other, lambda a, b: b * a, lambda u1, u2: u2 * u1)
+    
+    def __truediv__(self, other): return self._math_op(other, lambda a, b: a / b, lambda u1, u2: u1 / u2)
+    def __rtruediv__(self, other): return self._math_op(other, lambda a, b: b / a, lambda u1, u2: u2 / u1)
 
 
 class SpecFunc(Function2D):
@@ -417,3 +488,71 @@ class SpecFunc(Function2D):
 
     def to_context(self, ctx: ArrayContext) -> 'SpecFunc':
         return SpecFunc.from_Function2D(Function2D.to_context(self, ctx))
+
+
+class CorrelFunc(Function2D):
+    _first_u: PintUnit = UREG.second  # Задержка (Delay)
+    _sec___u: PintUnit = UREG.second  # Реальное время (Time)
+
+    def __init__(self, 
+                 matrix: Phisical[Shaped[ArrayLike, '... delay time']], 
+                 delay: Float[ArrayLike, 'delay'],
+                 time: Float[ArrayLike, 'time']):
+        if matrix[0].shape[-2] != delay.shape[-1]:
+            raise ValueError(f"Размер матрицы по оси задержки ({matrix[0].shape[-2]}) не совпадает с длиной оси delay ({delay.shape[-1]})")
+        if matrix[0].shape[-1] != time.shape[-1]:
+            raise ValueError(f"Размер матрицы по оси времени ({matrix[0].shape[-1]}) не совпадает с длиной оси time ({time.shape[-1]})")
+        
+        self._matrx_a, self._matrx_u = matrix
+        self._first_a = delay  
+        self._sec___a = time  
+
+    @classmethod
+    def from_Function2D(cls, func: Function2D) -> Self:
+        return cls(
+            matrix=(func._matrx_a, func._matrx_u), 
+            delay=func._first_a, 
+            time=func._sec___a
+        )
+
+    @property
+    def delay(self) -> Phisical[Float[ArrayLike, 'delay']]:
+        return self._first_a, self._first_u
+    
+    @delay.setter
+    def delay(self, value: Float[ArrayLike, 'delay']):
+        if value.shape[-1] != self._first_a.shape[-1]:
+            raise ValueError(f"Новая ось задержки должна иметь длину {self._first_a.shape[-1]}, получено {value.shape[-1]}")
+        self._first_a = value
+
+    @property
+    def time(self) -> Phisical[Float[ArrayLike, 'time']]:
+        return self._sec___a, self._sec___u
+    
+    @time.setter
+    def time(self, value: Float[ArrayLike, 'time']): 
+        if value.shape[-1] != self._sec___a.shape[-1]:
+            raise ValueError(f"Новая ось времени должна иметь длину {self._sec___a.shape[-1]}, получено {value.shape[-1]}")
+        self._sec___a = value
+
+    @property
+    def values(self) -> Phisical[Shaped[ArrayLike, '... delay time']]:
+        return self._matrx_a, self._matrx_u
+    
+    @values.setter
+    def values(self, value: Phisical[Shaped[ArrayLike, '... delay time']]):
+        if value[0].shape[-2] != self._first_a.shape[-1]:
+            raise ValueError(f"Размер матрицы по задержке (-2) должен быть {self._first_a.shape[-1]}")
+        if value[0].shape[-1] != self._sec___a.shape[-1]:
+            raise ValueError(f"Размер матрицы по времени (-1) должен быть {self._sec___a.shape[-1]}")
+        self._matrx_a, self._matrx_u = value
+
+    def __getitem__(self, idx: Union[int, slice]) -> 'CorrelFunc':
+        return CorrelFunc.from_Function2D(Function2D.__getitem__(self, idx))
+    
+    def __iter__(self) -> Iterator['CorrelFunc']:
+        for i in range(len(self)):
+            yield self[i]
+
+    def to_context(self, ctx: ArrayContext) -> 'CorrelFunc':
+        return CorrelFunc.from_Function2D(Function2D.to_context(self, ctx))

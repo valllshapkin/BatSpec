@@ -1,0 +1,2 @@
+class NumpyStub:
+    pass

@@ -68,10 +68,6 @@ def irfft2(x: Any, s: Tuple[int, int] = None, axes: Tuple[int, int] = (-2, -1)) 
 
 def stft(signal: Any, frame_length: int, frame_step: int, fft_length: int = None, 
          window: Any = None, pad_end: bool = False) -> Any:
-    """
-    Выполняет STFT с семантикой TensorFlow.
-    Гарантирует ИДЕНТИЧНЫЙ размер матриц (Frequency x Time) во всех фреймворках!
-    """
     ctx = ArrayContext.from_array(signal)
     if fft_length is None:
         fft_length = frame_length
@@ -79,7 +75,6 @@ def stft(signal: Any, frame_length: int, frame_step: int, fft_length: int = None
     pad_len = 0
     sig_len = signal.shape[-1]
 
-    # 1. Единый базовый паддинг: дополняем сигнал до ровного количества фреймов
     if pad_end:
         if sig_len < frame_length:
             pad_len = frame_length - sig_len
@@ -87,11 +82,9 @@ def stft(signal: Any, frame_length: int, frame_step: int, fft_length: int = None
             rem = (sig_len - frame_length) % frame_step
             pad_len = (frame_step - rem) % frame_step if rem != 0 else 0
 
-    # 2. Спец-паддинг для PyTorch: так как он нарезает куски по fft_length, ему нужен хвост длиннее
     if ctx.isTorch() and fft_length > frame_length:
         pad_len += (fft_length - frame_length)
 
-    # 3. Применяем нули в конец
     if pad_len > 0:
         if ctx.isTensorflow():
             paddings = [[0, 0]] * (len(signal.shape) - 1) + [[0, pad_len]]
@@ -107,23 +100,28 @@ def stft(signal: Any, frame_length: int, frame_step: int, fft_length: int = None
             if not ctx.isNumpy():
                 signal = convert_to(signal, ctx)
 
-    # 4. Выполняем строгое STFT (без внутренних додумок фреймворков)
     if ctx.isTensorflow():
-        win_fn = (lambda *args, **kwargs: window) if window is not None else None
-        # pad_end=False, так как мы уже всё западили сами!
+        # ИСПРАВЛЕНИЕ: TF требует чтобы dtype окна строго совпадал с dtype сигнала (даже если он complex)
+        def win_fn(length, dtype):
+            if window is None:
+                return None
+            w = ctx.fw.convert_to_tensor(window)
+            if w.dtype != dtype:
+                w = ctx.fw.cast(w, dtype)
+            return w
+            
         res = ctx.fw.signal.stft(signal, frame_length=frame_length, frame_step=frame_step, 
-                                 fft_length=fft_length, window_fn=win_fn, pad_end=False)
+                                 fft_length=fft_length, window_fn=win_fn if window is not None else None, 
+                                 pad_end=False)
         return ctx.fw.linalg.matrix_transpose(res)
                                   
     elif ctx.isTorch():
         import torch.nn.functional as F
-        # Защита от симметричного паддинга PyTorch: дополняем окно справа вручную
         if window is not None and fft_length > frame_length:
             pt_window = F.pad(window, (0, fft_length - frame_length))
         else:
             pt_window = window
             
-        # Говорим PyTorch, что окно уже нужного размера, чтобы он не лез его центрировать
         stft_matrix = ctx.fw.stft(signal, n_fft=fft_length, hop_length=frame_step, 
                                   win_length=fft_length, window=pt_window, 
                                   center=False, return_complex=True)
@@ -140,7 +138,6 @@ def stft(signal: Any, frame_length: int, frame_step: int, fft_length: int = None
         frames = frames[..., ::frame_step, :]
         frames = frames * np_win
         
-        # np.fft.rfft сам добавляет нули справа, если n > frame_length
         res = np.fft.rfft(frames, n=fft_length, axis=-1)
         res = np.swapaxes(res, -2, -1)
         
@@ -150,20 +147,23 @@ def stft(signal: Any, frame_length: int, frame_step: int, fft_length: int = None
 
 def istft(stft_matrix: Any, frame_length: int, frame_step: int, fft_length: int = None, 
           window: Any = None, length: int = None) -> Any:
-    """
-    Выполняет обратное STFT.
-    Ожидает матрицу с формой [..., bins, frames] (Frequency x Time).
-    """
     ctx = ArrayContext.from_array(stft_matrix)
     if fft_length is None:
         fft_length = frame_length
         
     if ctx.isTensorflow():
-        win_fn = (lambda *args, **kwargs: window) if window is not None else None
+        def win_fn(length, dtype):
+            if window is None:
+                return None
+            w = ctx.fw.convert_to_tensor(window)
+            if w.dtype != dtype:
+                w = ctx.fw.cast(w, dtype)
+            return w
+
         stfts = ctx.fw.linalg.matrix_transpose(stft_matrix)
         res = ctx.fw.signal.inverse_stft(stfts, frame_length=frame_length, 
                                          frame_step=frame_step, fft_length=fft_length, 
-                                         window_fn=win_fn)
+                                         window_fn=win_fn if window is not None else None)
         if length is not None:
             res = res[..., :length]
         return res

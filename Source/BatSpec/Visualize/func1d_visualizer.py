@@ -10,10 +10,8 @@ from MultiArray.Core import ArrayContext, Framework, DeviceType
 
 # --- Твои реальные импорты ---
 from BatSpec.QtUp.Reactive.reactive_dict import ReactiveDict
-from BatSpec.QtUp.Selector import Selector
 
-# Подставьте актуальные пути
-from BatSpec.Core.Functions import Function1D
+from BatSpec.Core.Functions import Function1D, TimeFunc, FreqFunc
 from BatSpec.Core.Physical.Units import PintUnit, UREG
 
 
@@ -46,65 +44,137 @@ class Function1DVisualizer(QtWidgets.QGroupBox):
         self.main_layout.setContentsMargins(8, 8, 8, 8)
         self.main_layout.setSpacing(8)
 
-        self.selector = Selector(title="Выбрать график:", parent=self)
-        self.selector.set_dictionary(plot_store)
-        self.main_layout.addWidget(self.selector)
+        # --- ПАНЕЛЬ УПРАВЛЕНИЯ ---
+        self.control_layout = QtWidgets.QHBoxLayout()
+        self.norm_cb = QtWidgets.QCheckBox("Нормировать Y (Z-Score)")
+        self.norm_cb.setChecked(True)
+        self.norm_cb.toggled.connect(self._redraw_plot)
+        self.control_layout.addWidget(self.norm_cb)
+        self.control_layout.addStretch()
+        self.main_layout.addLayout(self.control_layout)
+
+        # --- СПИСОК ЧЕКБОКСОВ ---
+        self.list_widget = QtWidgets.QListWidget()
+        self.list_widget.setMaximumHeight(120)  
+        self.main_layout.addWidget(self.list_widget)
+        self.list_widget.itemChanged.connect(self._redraw_plot)
 
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.plot_widget.addLegend(offset=(10, 10)) 
         self.main_layout.addWidget(self.plot_widget)
 
-        self.plot_curve = self.plot_widget.plot()
-        self.plot_curve.setDownsampling(ds=True, auto=True, method='peak')
-        self.plot_curve.setClipToView(True)
-        self.plot_curve.setPen(pg.mkPen(color="#00FF00", width=1.5)) 
+        self.sync_timer = QtCore.QTimer(self)
+        self.sync_timer.timeout.connect(self._sync_store)
+        self.sync_timer.start(200)
 
-        self.selector.signals.keySelected.connect(self._redraw_plot)
-        self.selector.signals.activeValueChanged.connect(self._redraw_plot)
+        self.colors = [
+            '#00FF00', '#FF00FF', '#00FFFF', '#FFFF00', 
+            '#FF5555', '#5555FF', '#FFAA00', '#FFFFFF'
+        ]
 
-        self._redraw_plot()
+    def _sync_store(self):
+        current_keys = set(plot_store.keys())
+        list_keys = set(self.list_widget.item(i).text() for i in range(self.list_widget.count()))
+        
+        added = current_keys - list_keys
+        removed = list_keys - current_keys
+        
+        if added or removed:
+            self.list_widget.blockSignals(True)
+            
+            for key in removed:
+                items = self.list_widget.findItems(key, QtCore.Qt.MatchExactly)
+                for item in items:
+                    self.list_widget.takeItem(self.list_widget.row(item))
+            
+            for key in added:
+                item = QtWidgets.QListWidgetItem(key)
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+                item.setCheckState(QtCore.Qt.Checked) # По умолчанию включаем
+                self.list_widget.addItem(item)
+                
+            self.list_widget.blockSignals(False)
+            
+            if removed or added:
+                self._redraw_plot()
 
     def _redraw_plot(self, *args) -> None:
-        func: Function1D | None = self.selector.active_value()
-        active_key: str | None = self.selector.active_key()
+        self.plot_widget.clear()
 
-        if func is None or active_key is None:
-            self.plot_curve.setData([], [])
-            self.plot_widget.setTitle("Нет данных для отображения")
+        checked_items = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.checkState() == QtCore.Qt.Checked:
+                checked_items.append(item.text())
+
+        do_norm = self.norm_cb.isChecked()
+
+        if not checked_items:
+            self.plot_widget.setTitle("Выберите графики для отображения")
             self.plot_widget.getPlotItem().setLabel('bottom', 'Ось X')
-            self.plot_widget.getPlotItem().setLabel('left', 'Ось Y')
+            self.plot_widget.getPlotItem().setLabel('left', 'Z-Score' if do_norm else 'Значения')
             return
 
-        try:
-            # Извлекаем тензоры в их исходном формате (фреймворке)
-            x_tensor = func._axis__a
-            y_tensor = func._value_a
-            x_unit_str = str(func._axis__u)
-            y_unit_str = str(func._value_u)
+        self.plot_widget.setTitle("")
+        
+        color_idx = 0
+        first_func = None
 
-            # Обработка батчей: если данные многомерные, берем первый элемент
-            title_suffix = ""
-            if y_tensor.ndim > 1:
-                batch_size = y_tensor.shape[0]
-                title_suffix = f" (элемент 0 из {batch_size})"
-                y_tensor = y_tensor[0] # Визуализируем только первый элемент батча
+        for key in checked_items:
+            func = plot_store.get(key)
+            if func is None:
+                continue
             
-            # Универсально конвертируем данные в NumPy массивы для PyQtGraph
-            x_data = ma.to_numpy(x_tensor)
-            y_data = ma.to_numpy(y_tensor) 
-            
-            # Обновляем график
-            self.plot_curve.setData(x=x_data, y=y_data)
+            if first_func is None:
+                first_func = func
 
-            # Обновляем UI
-            self.plot_widget.setTitle(f"График: {active_key}{title_suffix}")
-            self.plot_widget.getPlotItem().setLabel('bottom', 'Ось X', units=x_unit_str)
-            self.plot_widget.getPlotItem().setLabel('left', 'Значение', units=y_unit_str)
+            try:
+                x_tensor = func._axis__a
+                y_tensor = func._value_a
 
-        except Exception as e:
-            self.plot_widget.setTitle(f"Ошибка формата данных: {e}")
-            self.plot_curve.setData([], [])
+                if y_tensor.ndim > 1:
+                    y_tensor = y_tensor[0]
+                
+                x_data = ma.to_numpy(x_tensor)
+                y_data = ma.to_numpy(y_tensor) 
+                
+                # --- СТАТИСТИЧЕСКАЯ НОРМАЛИЗАЦИЯ ---
+                if do_norm:
+                    mean_val = np.mean(y_data)
+                    std_val = np.std(y_data)
+                    # Избегаем деления на ноль для константных графиков
+                    if std_val < 1e-12:
+                        std_val = 1.0
+                    y_data = (y_data - mean_val) / std_val
 
+                color = self.colors[color_idx % len(self.colors)]
+                
+                curve = self.plot_widget.plot(
+                    x=x_data, 
+                    y=y_data, 
+                    pen=pg.mkPen(color=color, width=1.5),
+                    name=key
+                )
+                curve.setDownsampling(ds=True, auto=True, method='peak')
+                curve.setClipToView(True)
+
+                color_idx += 1
+
+            except Exception as e:
+                print(f"Ошибка отрисовки графика {key}: {e}")
+
+        if first_func is not None:
+            x_unit_str = str(first_func._axis__u)
+            if isinstance(first_func, TimeFunc):
+                x_label = "Время"
+            elif isinstance(first_func, FreqFunc):
+                x_label = "Частота"
+            else:
+                x_label = "Ось X"
+
+            self.plot_widget.getPlotItem().setLabel('bottom', x_label, units=x_unit_str)
+            self.plot_widget.getPlotItem().setLabel('left', 'Z-Score (σ)' if do_norm else 'Значения')
 
 # =====================================================================
 # 3. ДЕМОНСТРАТОР (ОТЛАДКА)
@@ -113,66 +183,36 @@ class Function1DVisualizer(QtWidgets.QGroupBox):
 class DemoWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Real-Time Function1D Visualizer (MultiArray edition)")
+        self.setWindowTitle("Multi-Line Function1D Visualizer")
         self.resize(800, 600)
 
         self.visualizer = Function1DVisualizer()
         self.setCentralWidget(self.visualizer)
         
-        # Попытаемся использовать PyTorch контекст, если он есть, иначе NumPy
         try:
             import torch
             self.ctx = ArrayContext(Framework.TORCH, DeviceType.CPU, None)
         except ImportError:
             self.ctx = ArrayContext(Framework.NUMPY, DeviceType.CPU, None)
 
-        # --- Создаем статический график (Осциллограмма) ---
         t_np = np.linspace(0, 1, 1000)
-        y_time_np = np.sin(2 * np.pi * 10 * t_np)
+        # Сумасшедший разброс порядков:
+        y1_np = np.sin(2 * np.pi * 5 * t_np) * 10000.0  
+        y2_np = np.cos(2 * np.pi * 5 * t_np) * 0.0001
         
-        # Конвертируем в тензоры выбранного фреймворка
         t_tensor = ma.convert_to(t_np, self.ctx)
-        y_time_tensor = ma.convert_to(y_time_np, self.ctx)
-
-        time_func = Function1D(
-            values=(y_time_tensor, UREG.pascal),
-            axis=(t_tensor, UREG.second)
-        )
-        update_function(f"Осциллограмма ({self.ctx.isTorch() and 'Torch' or 'NumPy'})", time_func)
-
-        # --- Подготовка для анимированного графика (Спектр) ---
-        f_np = np.linspace(0, 100, 500)
-        self.f_tensor = ma.convert_to(f_np, self.ctx)
-        self.phase = 0.0
-
-        self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.update_live_data)
-        self.timer.start(50)
-
-    def update_live_data(self):
-        self.phase += 0.2
         
-        width = 2.0 + np.sin(self.phase) * 1.5 
-        f_np = ma.to_numpy(self.f_tensor)
-        y_freq_np = np.exp(-((f_np - 10)**2) / width)
+        func1 = TimeFunc(values=(ma.convert_to(y1_np, self.ctx), UREG.dimensionless), axis=t_tensor)
+        func2 = TimeFunc(values=(ma.convert_to(y2_np, self.ctx), UREG.dimensionless), axis=t_tensor)
         
-        y_freq_tensor = ma.convert_to(y_freq_np, self.ctx)
-        
-        freq_func = Function1D(
-            values=(y_freq_tensor, UREG.pascal / UREG.hertz**0.5),
-            axis=(self.f_tensor, UREG.hertz)
-        )
-        
-        update_function("Спектр (Real-Time)", freq_func)
-
+        update_function("Синус (Ампл 10000)", func1)
+        update_function("Косинус (Ампл 0.0001)", func2)
 
 def run_standalone_demo() -> None:
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
-
     window = DemoWindow()
     window.show()
-
     sys.exit(app.exec())
 
 if __name__ == "__main__":

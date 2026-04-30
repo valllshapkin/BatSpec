@@ -21,18 +21,21 @@ class DeviceType(enum.Enum):
 # ARRAY CONTEXT
 # ==========================================
 
-StubFW = Any
+
 
 if TYPE_CHECKING:   
+    from MultiArray.Stubs.numpy import NumpyStub
+    from MultiArray.Stubs.torch import TorchStub
+
+    type StubFW = Type[NumpyStub] | Type[TorchStub] | Any # type: ignore
     import numpy
     import torch
     import tensorflow as tf
     import jax
     import cupy
 
-    # Так делать нельзя, но если хотите чтобы тайпчекер дополнял ваши ctx.fw. Игнорируйте (Проверено с pylance)
-    StubFW = Type[numpy] | Type[torch] | Type[tf] | Type[jax] | Type[cupy] | Any # type: ignore
-
+else:
+    type StubFW = Any
 
 class ArrayContext:
     """
@@ -96,7 +99,7 @@ class ArrayContext:
         return None
 
     @property
-    def fw(self) -> Union[types.ModuleType, StubFW]:
+    def fw(self) -> Union[types.ModuleType, StubFW, Any]:
         ''' Возвращает реальный модуль фреймворка np, tf, torch и тд '''
         if self._framework == Framework.NUMPY:
             import numpy as np

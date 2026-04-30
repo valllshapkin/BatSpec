@@ -14,16 +14,14 @@ from BatSpec.Core.Physical.Units import UREG, unit_devide, unit_sqrt, unit_mul
 
 
 # =====================================================================
-# КОНТЕКСТНЫЙ МЕНЕДЖЕР ВЫЧИСЛЕНИЙ
+# КОНТЕКСТНЫЙ МЕНЕДЖЕР ВЫЧИСЛЕНИЙ И БЕЗОПАСНЫЕ ТИПЫ
 # =====================================================================
 
 _dsp_tls = threading.local()
 
 @contextmanager
 def DSPContext(ctx: ma.ArrayContext):
-    """
-    Контекстный менеджер для переопределения вычислительного бэкенда (фреймворка и устройства).
-    """
+    """Контекстный менеджер для переопределения вычислительного бэкенда."""
     old_ctx = getattr(_dsp_tls, 'math_ctx', None)
     _dsp_tls.math_ctx = ctx
     try:
@@ -35,15 +33,26 @@ def _get_math_ctx(default_ctx: ma.ArrayContext) -> ma.ArrayContext:
     override = getattr(_dsp_tls, 'math_ctx', None)
     return override if override is not None else default_ctx
 
-
 def _get_real_dtype(tensor: Any, ctx: ma.ArrayContext) -> Any:
-    """Безопасно извлекает вещественный тип данных."""
+    """Безопасно извлекает вещественный тип данных (отсекая комплексность)."""
     if ctx.isTensorflow():
         return tensor.dtype.real_dtype if hasattr(tensor.dtype, 'real_dtype') else tensor.dtype
     elif ctx.isTorch():
-        return tensor.real.dtype if tensor.is_complex() else tensor.dtype
+        return tensor.real.dtype if getattr(tensor, 'is_complex', lambda: False)() else tensor.dtype
     else:
         return tensor.real.dtype if hasattr(tensor, 'real') else getattr(tensor, 'dtype', None)
+
+def _safe_return_ctx(orig_ctx: ma.ArrayContext, result_tensor: Any) -> ma.ArrayContext:
+    """
+    ФУНДАМЕНТАЛЬНОЕ ПРАВИЛО:
+    Создает контекст для возврата. Фреймворк и устройство берутся от orig_ctx.
+    НО dtype берется строго от result_tensor.
+    Это предотвращает случайный каст из float в complex и наоборот 
+    при возврате из DSP-функции в исходный контекст.
+    """
+    out_dtype = getattr(result_tensor, 'dtype', None)
+    return ma.ArrayContext(orig_ctx._framework, orig_ctx._device, out_dtype)
+
 
 # =====================================================================
 # БЛОК 1: Сложные DSP функции (STFT, IFFT, Correlogram)
@@ -69,9 +78,6 @@ def makeComplexSpec(signal: TimeFunc, window: Window, overlap: float = 0.5, bins
 
     win = window.get_array(sr, real_ctx)
 
-    # ====================================================================
-    # ЭКСТРЕМАЛЬНЫЙ DSP: Direct DTFT
-    # ====================================================================
     if fft_length < orig_win_length:
         warnings.warn(f"fft_length ({fft_length}) < win_length ({orig_win_length}). "
                       "Используется точный матричный расчет DTFT (Без обрезки окна!).")
@@ -132,8 +138,7 @@ def makeComplexSpec(signal: TimeFunc, window: Window, overlap: float = 0.5, bins
             stft = ma.convert_to(np.swapaxes(stft_np, -2, -1), math_ctx)
             
     else:
-        # Стандартный путь: Обычный FFT
-        # ИСПРАВЛЕНИЕ 1: pad_end=False для точного совпадения формы матриц с Legacy TF
+        # Стандартный путь
         stft = mfft.stft(signal_a, frame_length=orig_win_length, frame_step=hop, fft_length=fft_length, window=win, pad_end=False)
 
     scale_factor = math.sqrt(2.0 / sr)
@@ -145,11 +150,8 @@ def makeComplexSpec(signal: TimeFunc, window: Window, overlap: float = 0.5, bins
 
     spec_math = SpecFunc(matrix=(stft * scale_factor, spec_unit), freq=freq_axis, time=time_axis)
     
-    # ИСПРАВЛЕНИЕ 2: Возвращаем данные в исходный фреймворк, но СОХРАНЯЕМ КОМПЛЕКСНЫЙ ТИП!
-    # Передавая None в dtype, мы заставляем convert_to не менять тип данных насильно
-    return_ctx = ma.ArrayContext(orig_ctx._framework, orig_ctx._device, None)
-    
-    return spec_math.to_context(return_ctx)
+    # Возвращаем в исходный фреймворк, строго сохраняя COMPLEX тип
+    return spec_math.to_context(_safe_return_ctx(orig_ctx, spec_math.values[0]))
 
 
 def inverseComplexSpec(spec: SpecFunc, window: Window, overlap: float = 0.5) -> TimeFunc:
@@ -186,21 +188,16 @@ def inverseComplexSpec(spec: SpecFunc, window: Window, overlap: float = 0.5) -> 
     scale_factor = math.sqrt(2.0 / sr)
     unscaled = complex_matrix / scale_factor
 
+    # istft ВО ВСЕХ ФРЕЙМВОРКАХ возвращает вещественный сигнал (Real)
     signal_a = mfft.istft(unscaled, frame_length=win_length, frame_step=hop, fft_length=fft_length, window=win)
-    
-    if hasattr(signal_a, 'real') and not math_ctx.isTorch():
-        signal_a = signal_a.real
-    elif math_ctx.isTorch() and signal_a.is_complex():
-        signal_a = signal_a.real
     
     new_time_axis = ma.arange(signal_a.shape[-1], real_ctx) / float(sr)
     signal_unit = unit_mul(spec_unit, unit_sqrt(UREG.Hz))
 
     time_math = TimeFunc(values=(signal_a, signal_unit), axis=new_time_axis)
     
-    # Возвращаем в исходный контекст, позволяя dtype определиться автоматически (как вещественный/real)
-    return_ctx = ma.ArrayContext(orig_ctx._framework, orig_ctx._device, None)
-    return time_math.to_context(return_ctx)
+    # ВОЗВРАЩАЕМ КАК ЕСТЬ (Real), игнорируя то, что исходный orig_ctx (от спектра) был Complex!
+    return time_math.to_context(_safe_return_ctx(orig_ctx, signal_a))
 
 
 def makeSpec(signal: TimeFunc, window: Window, overlap: float = 0.5, bins: int = 300) -> SpecFunc:
@@ -208,11 +205,9 @@ def makeSpec(signal: TimeFunc, window: Window, overlap: float = 0.5, bins: int =
     math_ctx = _get_math_ctx(orig_ctx)
 
     signal_math = signal.to_context(math_ctx)
-    
-    # 1. Получаем КОМПЛЕКСНУЮ спектрограмму
     complex_spec_math = makeComplexSpec(signal_math, window, overlap, bins)
     
-    # 2. Берем модуль (абсолютное значение: sqrt(Re^2 + Im^2))
+    # Извлечение амплитуды делает тензор вещественным
     amp_matrix = ma.abs(complex_spec_math.values[0])
     
     spec_math = SpecFunc(
@@ -221,22 +216,17 @@ def makeSpec(signal: TimeFunc, window: Window, overlap: float = 0.5, bins: int =
         time=complex_spec_math.time[0]
     )
     
-    # 3. Возвращаем в исходный фреймворк, сохраняя вещественный тип амплитуды
-    return_ctx = ma.ArrayContext(orig_ctx._framework, orig_ctx._device, None)
-    
-    return spec_math.to_context(return_ctx)
+    # Безопасный возврат с сохранением вещественного типа
+    return spec_math.to_context(_safe_return_ctx(orig_ctx, amp_matrix))
 
 
 def makeRobustSpec(
     signal: TimeFunc,
-    window,  # одно окно или тюпл окон
+    window,
     overlap: float = 0.5,
     bins: int = 300,
     shifts: int | tuple[int, ...] = 4
 ) -> SpecFunc:
-    """
-    Вычисляет спектрограмму, устойчивую к сингулярностям.
-    """
     windows = window if isinstance(window, tuple) else (window,)
 
     if isinstance(shifts, int):
@@ -284,11 +274,6 @@ def makeRobustSpec(
 
 
 def makeCorrelogram(spec: SpecFunc, max_delay_ms: float = 10.0, blur_sigma: Union[float, Tuple[float, float]] = 0.0) -> CorrelFunc:
-    """
-    Создает коррелограмму на основе спектрограммы. 
-    Рассчитывает MSE по оси частот между исходной спектрограммой и средним 
-    двух смещенных спектрограмм (+dt и -dt).
-    """
     do_blur = False
     if isinstance(blur_sigma, tuple):
         if blur_sigma[0] > 0 or blur_sigma[1] > 0:
@@ -379,38 +364,6 @@ def makeLogDB(spec: SpecFunc, add_one: bool = False) -> SpecFunc:
             return 20 * ma.log10(scaled_ratio)
 
     return spec.cloneApply(func=to_db, new_unit=UREG.dB)
-
-def makePiecewiseLog(spec: SpecFunc) -> SpecFunc:
-    """
-    Применяет кусочно-непрерывное логарифмическое сжатие к спектрограмме:
-    Y = X,           если X < 0
-    Y = ln(X + 1),   если X >= 0
-    
-    Идеально подходит для работы с Z-нормированными данными (где есть отрицательные значения),
-    сжимая огромные пики, но не искажая шумовую полку.
-    """
-    _, old_unit = spec.values
-
-    def piecewise_log_func(arr: Any) -> Any:
-        ctx = ma.ArrayContext.from_array(arr)
-        
-        if ctx.isTorch():
-            # ctx.fw.log1p эквивалентно ln(x + 1)
-            return ctx.fw.where(arr > 0, ctx.fw.log1p(arr), arr)
-            
-        elif ctx.isTensorflow():
-            # TensorFlow строго относится к типам в условиях
-            zero = ctx.fw.constant(0.0, dtype=arr.dtype)
-            return ctx.fw.where(arr > zero, ctx.fw.math.log1p(arr), arr)
-            
-        else:
-            # Для NumPy, JAX и CuPy
-            return ctx.fw.where(arr > 0, ctx.fw.log1p(arr), arr)
-
-    # При логарифмировании физическая размерность (например, Вольты) утрачивает прямой смысл,
-    # поэтому возвращаем безразмерную величину (dimensionless).
-    return spec.cloneApply(func=piecewise_log_func, new_unit=UREG.dimensionless)
-
 
 
 # =====================================================================
