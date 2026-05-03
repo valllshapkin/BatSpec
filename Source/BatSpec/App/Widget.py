@@ -1,6 +1,5 @@
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTabWidget
 
 from BatSpec.App.中Menu.Widget import AddMenu
 from W.PySide6.QtBuilder import build_node as b
