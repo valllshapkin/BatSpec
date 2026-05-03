@@ -2,29 +2,30 @@ import os
 import inspect
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING, Self, Any
+from typing import Any
 
-from PySide6.QtWidgets import QWidget, QApplication
-from PySide6.QtCore import QEvent, QLocale, QObject, QTranslator
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QLocale, QObject, QTranslator
 from PySide6 import QtCore # type: ignore
 
-from BatSpec.Python import delete_init
-from BatSpec.QtUp.Settings import Settings as SettingsProtocol, LocalesField
+# Подключаем наш новый мощный фреймворк настроек
+from W.PySide6.QtSettings import Settings as SettingsProtocol, Field, LocalesAdapter
 
 class Locales:
-    # Реестр активных инстансов Locales. Позволяет статичному TranslateComponent
-    # находить нужные экземпляры для регистрации JIT и путей.
     _active_instances: list['Locales'] = []
 
-    class Settings(SettingsProtocol):
-        locales = LocalesField(
+    # Наследуемся от QObject, чтобы магия создания сигналов в Field сработала!
+    class Settings(QObject, SettingsProtocol):
+        # Вся логика, адаптеры и сигналы теперь в одной строке!
+        locales, locales_updated = Field(
             default=[QLocale(QLocale.Language.English, QLocale.Country.UnitedStates)],
+            adapter=LocalesAdapter(),
             key="Locales"
         )
 
         def __init__(self, this: 'Locales', SETTING_PATH: Path) -> None:
+            super().__init__()
             self.this = this
-
             self._settings = QtCore.QSettings(
                 str(SETTING_PATH), 
                 QtCore.QSettings.Format.IniFormat
@@ -33,13 +34,6 @@ class Locales:
         @property
         def settings(self) -> QtCore.QSettings | None:
             return self._settings
-
-    class Signals(QObject):
-        locales_updated = QtCore.Signal(list)
-
-        def __init__(self, this: 'Locales') -> None:
-            super().__init__()
-            self.this = this
 
     class API:
         def __init__(self, this: 'Locales') -> None:
@@ -58,30 +52,8 @@ class Locales:
             self._supported_languages = languages
 
         def change_language(self, new_locales: list[QLocale]) -> None:
+            # Дескриптор сам отправит сигнал locales_updated
             self.this.settings.locales = new_locales
-            self.this.signals.locales_updated.emit(new_locales)
-
-    @delete_init
-    class Trigger(QWidget if TYPE_CHECKING else object):
-        """Миксин для виджетов. Ловит смену языка в ОС/Приложении и вызывает onLanguageChange"""
-        def __init_subclass__(cls) -> None:
-            old_changeEvent = cls.changeEvent
-            def new_changeEvent(self: Self, event: QEvent) -> None:
-                if event.type() == QEvent.Type.LanguageChange:
-                    self.onLanguageChange()
-                old_changeEvent(self, event)
-            cls.changeEvent = new_changeEvent
-
-            old_init = cls.__init__
-            def new_init(self: Self, *args: Any, **kwargs: Any) -> None:
-                old_init(self, *args, **kwargs)
-                self.onLanguageChange()
-            cls.__init__ = new_init
-
-            return super().__init_subclass__()
-
-        def onLanguageChange(self) -> None:
-            pass
 
     class TranslateComponent:
         """
@@ -95,7 +67,6 @@ class Locales:
             
             old_init = cls.__init__
             def new_init(self_obj: Any, *args: Any, **kw: Any) -> None:
-                # Регистрируем только один раз для конкретного класса
                 if not getattr(cls, "_translator_registered", False):
                     setattr(cls, "_translator_registered", True)
                     
@@ -103,9 +74,7 @@ class Locales:
                         path = Path(module.__file__).parent / "__assets__" / "translations"
                         
                         for instance in Locales._active_instances:
-                            # Вызываем компиляцию (если jit_compile=True)
                             instance.wrapper.compile_jit(module.__file__)
-                            # Регистрируем путь к qm файлам
                             instance.wrapper.register_translation_path(path)
                             
                 old_init(self_obj, *args, **kw)
@@ -164,7 +133,6 @@ class Locales:
             def _() -> None:
                 supported = self.api.supported_languages
                 if not supported:
-                    print("[Locales Debug] No supported languages set!")
                     return
 
                 new_locales = [
@@ -177,20 +145,21 @@ class Locales:
 
     def __init__(self, SETTING_PATH: Path) -> None:
         self.settings = self.Settings(self, SETTING_PATH)
-        self.signals = self.Signals(self)
         self.api = self.API(self)
         self.wrapper = self.Wrapper(self)
         self.debug = self.Debug(self.api)
         
-        # Добавляем себя в реестр, чтобы статический TranslateComponent нас нашел
         Locales._active_instances.append(self)
 
     def init(self, supported_languages: list[QLocale], jit_compile: bool = False, debug: bool = False) -> None:
         self.api.set_supported_languages(supported_languages)
         self.wrapper.jit_enabled = jit_compile
         
-        self.signals.locales_updated.connect(self.wrapper.reload_translators)
-        self.signals.locales_updated.emit(self.api.current_locales)
+        # Подписываемся напрямую на сигнал дескриптора
+        self.settings.locales_updated.connect(self.wrapper.reload_translators)
+        
+        # Первичная загрузка
+        self.wrapper.reload_translators(self.api.current_locales)
 
         if debug:
             self.debug.start_random_timer()
