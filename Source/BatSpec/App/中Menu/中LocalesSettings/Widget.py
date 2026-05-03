@@ -3,15 +3,15 @@ from PySide6.QtWidgets import (
     QComboBox, QPushButton, QListWidget, QListWidgetItem, QDialog
 )
 from PySide6.QtCore import QLocale, QTimer, Qt
-from BatSpec.QtUp.Builder import build_node as b
+from W.PySide6.QtBuilder import build_node as b
 from BatSpec.App.中Menu.中LocalesSettings.Logic import AppLocales
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
+
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
 
 REVERT_TIMEOUT = 15
 
 class ConfirmDialog(QDialog):
-    """Модальное блокирующее окно для подтверждения смены языка."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Confirm Language"))
@@ -56,23 +56,16 @@ class ConfirmDialog(QDialog):
         self.result_action = "revert"
         self.reject()
 
-
-class LocalesSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, QWidget):
+class LocalesSettingsPanel(Locales.TranslateComponent, ComponentLifecycle, QWidget):
     def __init__(self, parent=None):
-        QWidget.__init__(self, parent)
+        super().__init__(parent)
 
-        self._setup_ui()
-        self._populate_language_combo()
-        self._sync_ui_to_settings()
-        self._connect_signals()
-
-    def _setup_ui(self):
+    def __init_graph__(self):
         with b(self, QVBoxLayout()) as main_layout:
             main_layout.setContentsMargins(0, 0, 0, 0)
 
             with b(main_layout, QGroupBox()) as self.group_box:
                 with b(self.group_box, QVBoxLayout()) as group_layout:
-                    
                     with b(group_layout, QHBoxLayout()) as add_row:
                         with b(add_row, QComboBox()) as self.combo_language:
                             add_row.setStretchFactor(self.combo_language, 2)
@@ -95,7 +88,7 @@ class LocalesSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.T
                         with b(ctrl_row, QPushButton()) as self.btn_refresh:
                             self.btn_refresh.setFixedWidth(40)
 
-    def _connect_signals(self):
+    def __init_signal__(self):
         self.combo_language.currentIndexChanged.connect(self._on_language_selected)
         self.btn_add.clicked.connect(self._on_add_clicked)
         self.btn_remove.clicked.connect(self._on_remove_clicked)
@@ -103,8 +96,11 @@ class LocalesSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.T
         self.btn_move_down.clicked.connect(self._on_move_down)
         self.btn_refresh.clicked.connect(self._on_refresh_clicked)
         self.btn_apply.clicked.connect(self._on_apply_clicked)
+        AppLocales.settings.locales_updated.connect(self._on_setting_locales_updated)
 
-        AppLocales.signals.locales_updated.connect(self._on_setting_locales_updated)
+    def __init_ready__(self):
+        self._populate_language_combo()
+        self._sync_ui_to_settings()
 
     def _populate_language_combo(self):
         self.combo_language.clear()
@@ -174,26 +170,17 @@ class LocalesSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.T
         if not locs: return
         
         previous_locales = list(AppLocales.api.current_locales)
-        
-        # Меняем язык на новый
         AppLocales.api.change_language(locs)
 
-        # Вызываем модальное окно. Диалог уже будет переведен на новый язык!
         dialog = ConfirmDialog(self)
         dialog.exec()
 
-        # Если не нажато Keep, откатываем
         if dialog.result_action == "revert":
             AppLocales.api.change_language(previous_locales)
             
         self._sync_ui_to_settings()
 
     def _on_setting_locales_updated(self, locales: list):
-        # Если панель сама вызвала изменение, мы синхронизируемся в конце блока _on_apply_clicked.
-        # Этот слот на случай, если локаль поменяется извне.
-        pass
-
-    def onThemeChange(self):
         pass
 
     def onLanguageChange(self):
@@ -204,3 +191,4 @@ class LocalesSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.T
         self.btn_move_down.setText(self.tr("Down"))
         self.btn_refresh.setText("↻")
         self.btn_apply.setText(self.tr("Apply"))
+        super().onLanguageChange()

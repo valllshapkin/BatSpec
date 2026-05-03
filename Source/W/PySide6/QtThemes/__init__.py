@@ -6,13 +6,13 @@ import threading
 import subprocess
 
 from PySide6.QtGui import QGuiApplication
-from PySide6 import QtCore # type: ignore
-import qt_themes # type: ignore
+from PySide6 import QtCore
+import qt_themes
 
-from W.PySide6.QtSettings import Settings as SettingsProtocol, Field
+from W.PySide6.QtSettings import Field
 
 # ==========================================
-# SYSTEM (Без изменений, идеально работает)
+# SYSTEM 
 # ==========================================
 class _System(QtCore.QObject):
     onChanged = QtCore.Signal(str)
@@ -24,14 +24,14 @@ class _System(QtCore.QObject):
     def isDark(self) -> bool:
         app = QGuiApplication.instance()
         if app:
-            scheme = app.styleHints().colorScheme() # type: ignore
+            scheme = app.styleHints().colorScheme()
             if scheme == QtCore.Qt.ColorScheme.Dark: return True
             elif scheme == QtCore.Qt.ColorScheme.Light: return False
         
         if sys.platform.startswith("linux"): return self._is_linux_dark()
         else:
             try:
-                import darkdetect # type: ignore
+                import darkdetect
                 return darkdetect.isDark()
             except ImportError: return False
 
@@ -63,15 +63,15 @@ class _System(QtCore.QObject):
     def start_listener(self) -> None:
         app = QGuiApplication.instance()
         if app:
-            self._style_hints = app.styleHints() # type: ignore
-            self._style_hints.colorSchemeChanged.connect(self._handle_scheme_change) # type: ignore
+            self._style_hints = app.styleHints()
+            self._style_hints.colorSchemeChanged.connect(self._handle_scheme_change)
 
         if sys.platform.startswith("linux"):
             t = threading.Thread(target=self._linux_dbus_listener, daemon=True)
             t.start()
         else:
             try:
-                import darkdetect # type: ignore
+                import darkdetect
                 t = threading.Thread(target=self._darkdetect_listener, daemon=True)
                 t.start()
             except ImportError: pass
@@ -86,25 +86,24 @@ class _System(QtCore.QObject):
                 ['dbus-monitor', "path='/org/freedesktop/portal/desktop',interface='org.freedesktop.portal.Settings',member='SettingChanged'"],
                 stdout=subprocess.PIPE, text=True
             )
-            if not process.stdout: raise RuntimeError("Почемуто тайпчекер считает что оно может быть None")
+            if not process.stdout: raise RuntimeError()
             for line in iter(process.stdout.readline, ''):
                 if 'color-scheme' in line or 'uint32 1' in line or 'uint32 0' in line:
                     self.onChanged.emit('Dark' if self._is_linux_dark() else 'Light')
         except Exception: pass
 
     def _darkdetect_listener(self):
-        import darkdetect # type: ignore
-        darkdetect.listener(lambda theme: self.onChanged.emit(theme)) # type: ignore
+        import darkdetect
+        darkdetect.listener(lambda theme: self.onChanged.emit(theme))
 
 System = _System()
-
 
 # ==========================================
 # THEMES ARCHITECTURE
 # ==========================================
 class Themes:
-    class Settings(QtCore.QObject, SettingsProtocol):
-        # Красивое создание полей с авто-сигналами
+    # УБРАН SettingsProtocol из наследования.
+    class Settings(QtCore.QObject):
         dark, dark_updated = Field(default="catppuccin_mocha", val_type=str, key="Theme/Dark")
         light, light_updated = Field(default="github_light", val_type=str, key="Theme/Light")
         one, one_updated = Field(default="catppuccin_mocha", val_type=str, key="Theme/One")
@@ -141,7 +140,7 @@ class Themes:
 
         def set_one_and_apply(self, theme: str) -> None:
             if self.twoMode: raise RuntimeError("Disable twoMode first")
-            self.this.settings.one = theme # Автоматически эмитит сигнал one_updated
+            self.this.settings.one = theme
             self.this.wrapper.update_one_theme()
             
         def set_dark_and_apply(self, theme: str) -> None:
@@ -229,7 +228,6 @@ class Themes:
                     if dark_themes: self.api.set_dark_and_apply(random.choice(dark_themes))
                     
             self._timer.start()
-
 
     def __init__(self, SETTING_PATH: Path) -> None:
         self.settings = self.Settings(self, SETTING_PATH=SETTING_PATH)

@@ -1,5 +1,5 @@
 from PySide6.QtCore import QObject, Signal, QSettings
-from BatSpec.QtUp.Settings import Settings as SettingsProtocol, SettingField
+from W.PySide6.QtSettings import Field
 from pathlib import Path
 import logging
 
@@ -23,17 +23,18 @@ class Project:
         self.folder_records.mkdir(parents=True, exist_ok=True)
         self.folder_settings.mkdir(parents=True, exist_ok=True)
 
-        
 class ProjectState:
-
     class Signals(QObject):
         projectNewLoaded = Signal()
         windowStorageChanged = Signal()
 
-    class ProjectSettings(SettingsProtocol):
-        open_project = SettingField[str](default="", val_type=str, key="Project")
+    # ИСПРАВЛЕНИЕ: Класс должен наследоваться от QObject, чтобы магия сигналов
+    # из фабрики Field сработала корректно!
+    class ProjectSettings(QObject):
+        open_project, S_open_project = Field(default="", val_type=str, key="Project")
         
         def __init__(self):
+            super().__init__()
             self._settings = QSettings(
                 str(ScriptDir / "__assets__" / "settings.ini"), 
                 QSettings.Format.IniFormat
@@ -49,21 +50,16 @@ class ProjectState:
 
             def new_init(self, *args, **kwargs):
                 old_init(self, *args, **kwargs)
-
                 PROJECT_STATE.signals.projectNewLoaded.connect(self.onProjectNewLoaded)
                 PROJECT_STATE.signals.windowStorageChanged.connect(self.onWindowStorageChanged)
-
                 self.onProjectNewLoaded()
                 self.onWindowStorageChanged()
 
             cls.__init__ = new_init
             super().__init_subclass__(*args, **kwargs)
 
-        def onProjectNewLoaded(self):
-            pass
-
-        def onWindowStorageChanged(self):
-            pass
+        def onProjectNewLoaded(self): pass
+        def onWindowStorageChanged(self): pass
 
     currentProject: Project | None = None
 
@@ -79,8 +75,7 @@ class ProjectState:
         return self.currentProject is not None
     
     def loadProject(self, path: Path | None = None):
-        if path is None and self.currentProject is None:
-            return
+        if path is None and self.currentProject is None: return
             
         if path is None:
             self.currentProject = None
@@ -99,7 +94,6 @@ class ProjectState:
         self.currentProject = project
         self.signals.projectNewLoaded.emit()
         self.settings.open_project = str(path)
-
 
 PROJECT_STATE = ProjectState()
 

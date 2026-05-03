@@ -3,24 +3,17 @@ from PySide6.QtWidgets import (
     QLabel, QWidget, QVBoxLayout, QFormLayout, QGroupBox, 
     QCheckBox, QComboBox
 )
-from BatSpec.QtUp.Builder import build_node as b
+from W.PySide6.QtBuilder import build_node as b
 from BatSpec.App.中Menu.中ThemeSettings.Logic import AppThemes
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
 
-class ThemeSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, QWidget):
-    """
-    Переиспользуемая панель для управления темами.
-    """
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
+
+class ThemeSettingsPanel(Locales.TranslateComponent, ComponentLifecycle, QWidget):
     def __init__(self, parent=None):
-        QWidget.__init__(self, parent)
+        super().__init__(parent)
         
-        self._setup_ui()
-        self._populate_comboboxes()
-        self._sync_ui_to_settings()
-        self._connect_signals()
-        
-    def _setup_ui(self):
+    def __init_graph__(self):
         with b(self, QVBoxLayout()) as main_layout:
             main_layout.setContentsMargins(0, 0, 0, 0)
             
@@ -39,6 +32,21 @@ class ThemeSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.Tri
                     self.form_layout.addRow(self.label_one, self.combo_one)
                     self.form_layout.addRow(self.label_light, self.combo_light)
                     self.form_layout.addRow(self.label_dark, self.combo_dark)
+
+    def __init_signal__(self):
+        self.cb_two_mode.toggled.connect(self._on_user_toggled_mode)
+        self.combo_one.currentTextChanged.connect(self._on_user_changed_one)
+        self.combo_light.currentTextChanged.connect(self._on_user_changed_light)
+        self.combo_dark.currentTextChanged.connect(self._on_user_changed_dark)
+        
+        AppThemes.settings.twoMode_updated.connect(self._on_setting_mode_updated)
+        AppThemes.settings.one_updated.connect(self._on_setting_one_updated)
+        AppThemes.settings.light_updated.connect(self._on_setting_light_updated)
+        AppThemes.settings.dark_updated.connect(self._on_setting_dark_updated)
+
+    def __init_ready__(self):
+        self._populate_comboboxes()
+        self._sync_ui_to_settings()
 
     def _populate_comboboxes(self):
         all_themes_dict = qt_themes.get_themes()
@@ -62,17 +70,6 @@ class ThemeSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.Tri
         self.combo_one.setEnabled(not is_two_mode)
         self.combo_light.setEnabled(is_two_mode)
         self.combo_dark.setEnabled(is_two_mode)
-
-    def _connect_signals(self):
-        self.cb_two_mode.toggled.connect(self._on_user_toggled_mode)
-        self.combo_one.currentTextChanged.connect(self._on_user_changed_one)
-        self.combo_light.currentTextChanged.connect(self._on_user_changed_light)
-        self.combo_dark.currentTextChanged.connect(self._on_user_changed_dark)
-        
-        AppThemes.signals.one_updated.connect(self._on_setting_one_updated)
-        AppThemes.signals.light_updated.connect(self._on_setting_light_updated)
-        AppThemes.signals.dark_updated.connect(self._on_setting_dark_updated)
-        AppThemes.signals.twoMode_updated.connect(self._on_setting_mode_updated)
 
     def _on_user_toggled_mode(self, checked: bool):
         AppThemes.api.change_mod(checked)
@@ -110,12 +107,10 @@ class ThemeSettingsPanel(Locales.TranslateComponent, Locales.Trigger, Themes.Tri
         self.combo_dark.setCurrentText(theme_name)
         self.combo_dark.blockSignals(False)
 
-    def onThemeChange(self):
-        pass 
-    
     def onLanguageChange(self):
         self.group_box.setTitle(self.tr("Appearance"))
         self.cb_two_mode.setText(self.tr("Synchronize with system theme"))
         self.label_one.setText(self.tr("Theme (Static):"))
         self.label_light.setText(self.tr("Light theme:"))
         self.label_dark.setText(self.tr("Dark theme:"))
+        super().onLanguageChange()

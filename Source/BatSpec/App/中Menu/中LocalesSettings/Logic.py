@@ -1,10 +1,9 @@
 from pathlib import Path
 from PySide6.QtCore import QLocale
-from BatSpec.QtUp.Locales import Locales
+from W.PySide6.QtLocales import Locales
 
 ScriptDir = Path(__file__).parent
 
-# Единый глобальный инстанс локалей для всего приложения
 AppLocales = Locales(
     SETTING_PATH = ScriptDir / "__assets__" / "LocalesSettings.ini"
 )

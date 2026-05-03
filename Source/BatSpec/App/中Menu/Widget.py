@@ -1,24 +1,15 @@
 from PySide6.QtWidgets import QMainWindow
 from BatSpec.App.中Menu.中App.Widget import AppMenu
-# from BatSpec.App.中Menu.中Mode.Widget import ModeMenu
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
 
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
+class AddMenu(Locales.TranslateComponent, ComponentLifecycle, QMainWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-class AddMenu(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, QMainWindow):
-    def __init__(self):
-        QMainWindow.__init__(self)
-
-        # Инициализируем наши модульные меню
+    def __init_graph__(self):
+        if hasattr(super(), '__init_graph__'):
+            super().__init_graph__()
+            
         self.app_menu = AppMenu(self)
-        # self.mode_menu = ModeMenu(self)
-
-        # Добавляем их в верхнюю панель (MenuBar) главного окна
         self.menuBar().addMenu(self.app_menu)
-        # self.menuBar().addMenu(self.mode_menu)
-
-    def onLanguageChange(self):
-        super().onLanguageChange()
-
-    def onThemeChange(self):
-        super().onThemeChange()

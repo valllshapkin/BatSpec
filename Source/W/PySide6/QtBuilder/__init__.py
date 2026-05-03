@@ -14,7 +14,6 @@ def build_node[T](parent: QWidget | QLayout | Any, item: T) -> Generator[T, None
     """
     yield item 
     
-    # 1. Если родитель — это слой (QLayout)
     if isinstance(parent, QLayout):
         if isinstance(item, QWidget):
             parent.addWidget(item)
@@ -23,17 +22,13 @@ def build_node[T](parent: QWidget | QLayout | Any, item: T) -> Generator[T, None
         else:
             raise TypeError(f"Cannot add {type(item)} to QLayout.")
             
-    # 2. Если родитель — это виджет (QWidget)
     elif isinstance(parent, QWidget):
         if isinstance(item, QLayout):
-            # Вкладываем Layout внутрь QWidget
             parent.setLayout(item)
         elif isinstance(item, QWidget):
-            # Если это контейнер типа QSplitter или QStackedWidget
             if hasattr(parent, 'addWidget'):
                 parent.addWidget(item)
             else:
-                # Обычный виджет просто делает другой виджет своим ребенком
                 item.setParent(parent)
         else:
             raise TypeError(f"Cannot add {type(item)} to QWidget.")

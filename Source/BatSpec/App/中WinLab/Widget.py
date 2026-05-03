@@ -1,15 +1,16 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PySide6.QtCore import Qt
 
-from BatSpec.QtUp.TabInst import TabInstance
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
-from BatSpec.QtUp.Builder import build_node as b
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.QtTabInst import TabInstance
+from W.PySide6.QtBuilder import build_node as b
 
-class WindowLabTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, TabInstance):
+class WindowLabTab(Locales.TranslateComponent, ComponentLifecycle, TabInstance):
     def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
-        TabInstance.__init__(self, parent, tab_widget)
+        super().__init__(parent, tab_widget)
 
+    def __init_graph__(self):
         with b(self, QVBoxLayout()) as self.v:
             self.v.setContentsMargins(4, 0, 4, 0)
             
@@ -21,6 +22,3 @@ class WindowLabTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, 
             self.setTabName(self.tr("Window Lab"))
         self.vL.setText(self.tr("Window Lab not implemented"))
         super().onLanguageChange()
-
-    def onThemeChange(self):
-        super().onThemeChange()

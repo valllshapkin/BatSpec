@@ -1,21 +1,29 @@
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QFrame
-)
+from pathlib import Path
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 from PySide6.QtCore import Qt
 
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
-from BatSpec.QtUp.Builder import build_node as b
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.QtBuilder import build_node as b
+from W.PySide6.QtFrameless import FramelessMixin
 
-class HelpDialog(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, QDialog):
-    def __init__(self, parent=None):
-        QDialog.__init__(self, parent)
+ScriptDir = Path(__file__).parent
+ICON_PATH = ScriptDir.parent.parent.parent.parent / "__assets__" / "icon.png"
+
+class HelpDialog(Locales.TranslateComponent, ComponentLifecycle, FramelessMixin, QDialog):
+    def __init_state__(self):
         self.setModal(True)
-        self.setFixedSize(400, 250)
+        self.resize(450, 300)
+        # Инициализируем кастомную шапку для диалога!
+        self.init_frameless(icon_path=ICON_PATH, fallback_icon="ℹ️")
         
-        with b(self, QVBoxLayout()) as self.layout:
+    def __init_graph__(self):
+        # Получаем слой контента внутри кастомного окна
+        content_layout = self.build_frameless_ui()
+        
+        with b(content_layout, QVBoxLayout()) as self.layout:
             self.layout.setSpacing(10)
+            self.layout.setContentsMargins(16, 16, 16, 16)
 
             with b(self.layout, QHBoxLayout()) as header_layout:
                 with b(header_layout, QLabel()) as self.icon_label:
@@ -47,25 +55,26 @@ class HelpDialog(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, QD
 
             with b(self.layout, QPushButton()) as self.btn_close:
                 self.btn_close.setFixedWidth(100)
-                self.btn_close.clicked.connect(self.accept)
                 self.layout.setAlignment(self.btn_close, Qt.AlignmentFlag.AlignRight)
+
+    def __init_signal__(self):
+        self.btn_close.clicked.connect(self.accept)
+
+    def setWindowTitle(self, title: str):
+        super().setWindowTitle(title)
+        if hasattr(self, 'title_bar'):
+            self.title_bar.update_title(title)
+
+    def onThemeChange(self):
+        self.update_frameless_theme()
+        super().onThemeChange()
 
     def onLanguageChange(self):
         self.setWindowTitle(self.tr("Help & About"))
-        
         self.lbl_app_name.setText("BatSpec QtApp")
         self.lbl_version.setText(self.tr("Version: %1").replace("%1", "1.2.5 (Stable)"))
-        
         self.lbl_publisher.setText(self.tr("Publisher: %1").replace("%1", "BatSpec Industries"))
-        
-        self.lbl_description.setText(
-            self.tr("This application is designed for professional theme and localization management.")
-        )
-        
+        self.lbl_description.setText(self.tr("This application is designed for professional theme and localization management."))
         self.lbl_copyright.setText(self.tr("© 2024-2025 BatSpec. All rights reserved."))
         self.btn_close.setText(self.tr("Close"))
-        
         super().onLanguageChange()
-
-    def onThemeChange(self):
-        super().onThemeChange()

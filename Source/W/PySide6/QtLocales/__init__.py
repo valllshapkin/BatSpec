@@ -6,17 +6,15 @@ from typing import Any
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QLocale, QObject, QTranslator
-from PySide6 import QtCore # type: ignore
+from PySide6 import QtCore
 
-# Подключаем наш новый мощный фреймворк настроек
-from W.PySide6.QtSettings import Settings as SettingsProtocol, Field, LocalesAdapter
+from W.PySide6.QtSettings import Field, LocalesAdapter
 
 class Locales:
     _active_instances: list['Locales'] = []
 
-    # Наследуемся от QObject, чтобы магия создания сигналов в Field сработала!
-    class Settings(QObject, SettingsProtocol):
-        # Вся логика, адаптеры и сигналы теперь в одной строке!
+    # УБРАН SettingsProtocol из наследования.
+    class Settings(QObject):
         locales, locales_updated = Field(
             default=[QLocale(QLocale.Language.English, QLocale.Country.UnitedStates)],
             adapter=LocalesAdapter(),
@@ -52,15 +50,9 @@ class Locales:
             self._supported_languages = languages
 
         def change_language(self, new_locales: list[QLocale]) -> None:
-            # Дескриптор сам отправит сигнал locales_updated
             self.this.settings.locales = new_locales
 
     class TranslateComponent:
-        """
-        Статичный класс для тайпчекеров.
-        Перехватывает инициализацию и регистрирует JIT/пути переводов 
-        во всех активных инстансах Locales.
-        """
         def __init_subclass__(cls, **kwargs: Any) -> None:
             super().__init_subclass__(**kwargs)
             module = inspect.getmodule(cls)
@@ -79,7 +71,7 @@ class Locales:
                             
                 old_init(self_obj, *args, **kw)
             
-            cls.__init__ = new_init # type: ignore
+            cls.__init__ = new_init
 
     class Wrapper:
         def __init__(self, this: 'Locales') -> None:
@@ -132,8 +124,7 @@ class Locales:
             @self._timer.timeout.connect
             def _() -> None:
                 supported = self.api.supported_languages
-                if not supported:
-                    return
+                if not supported: return
 
                 new_locales = [
                     QLocale(QLocale.Language.English, QLocale.Country.UnitedStates),
@@ -155,10 +146,7 @@ class Locales:
         self.api.set_supported_languages(supported_languages)
         self.wrapper.jit_enabled = jit_compile
         
-        # Подписываемся напрямую на сигнал дескриптора
         self.settings.locales_updated.connect(self.wrapper.reload_translators)
-        
-        # Первичная загрузка
         self.wrapper.reload_translators(self.api.current_locales)
 
         if debug:

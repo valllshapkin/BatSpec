@@ -3,18 +3,16 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
     QLabel, QComboBox, QPlainTextEdit, QMessageBox
 )
-from PySide6.QtGui import (
-    QSyntaxHighlighter, QTextCharFormat, QColor, QFont
-)
+from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 from PySide6.QtCore import Qt, QRegularExpression
 
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
-from BatSpec.QtUp.Builder import build_node as b
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.QtBuilder import build_node as b
+from W.PySide6.QtFrameless import FramelessMixin
 
 from BatSpec.App.中Menu.中LocalesSettings.Logic import AppLocales
 from BatSpec.App.中Menu.中ThemeSettings.Logic import AppThemes
-
 
 class IniHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
@@ -46,21 +44,21 @@ class IniHighlighter(QSyntaxHighlighter):
                 match = iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), format)
 
-
-class UserDataDialog(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, QDialog):
-    def __init__(self, parent=None):
-        QDialog.__init__(self, parent)
+class UserDataDialog(Locales.TranslateComponent, ComponentLifecycle, FramelessMixin, QDialog):
+    def __init_state__(self):
         self.setModal(True)
-        self.resize(700, 500)
-        
+        self.resize(750, 550)
+        self.init_frameless(fallback_icon="📄")
         self.current_file_path = ""
 
-        with b(self, QVBoxLayout()) as self.layout:
+    def __init_graph__(self):
+        content_layout = self.build_frameless_ui()
+        
+        with b(content_layout, QVBoxLayout()) as self.layout:
             with b(self.layout, QHBoxLayout()) as self.top_panel:
                 with b(self.top_panel, QLabel()) as self.lbl_select: pass
                 
                 with b(self.top_panel, QComboBox()) as self.combo_files:
-                    # Используем пути к настройкам из синглтонов
                     self.combo_files.addItem(self.tr("Theme Settings"), AppThemes.settings.settings.fileName())
                     self.combo_files.addItem(self.tr("Locales Settings"), AppLocales.settings.settings.fileName())
                     self.top_panel.setStretchFactor(self.combo_files, 1)
@@ -77,10 +75,12 @@ class UserDataDialog(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger
                 with b(self.bottom_panel, QPushButton()) as self.btn_reload: pass
                 with b(self.bottom_panel, QPushButton()) as self.btn_save: pass
 
+    def __init_signal__(self):
         self.combo_files.currentIndexChanged.connect(self._on_file_changed)
         self.btn_save.clicked.connect(self._on_save_clicked)
         self.btn_reload.clicked.connect(self._load_current_file)
 
+    def __init_ready__(self):
         self._on_file_changed(0)
 
     def _on_file_changed(self, index: int):
@@ -100,8 +100,7 @@ class UserDataDialog(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger
             QMessageBox.critical(self, self.tr("Error"), f"Could not read file: {e}")
 
     def _on_save_clicked(self):
-        if not self.current_file_path:
-            return
+        if not self.current_file_path: return
 
         try:
             content = self.editor.toPlainText()
@@ -112,20 +111,23 @@ class UserDataDialog(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger
             self.btn_save.setText(self.tr("Saved!"))
             from PySide6.QtCore import QTimer
             QTimer.singleShot(1000, lambda: self.btn_save.setText(original_text))
-
         except Exception as e:
             QMessageBox.critical(self, self.tr("Error"), f"Could not save file: {e}")
+
+    def setWindowTitle(self, title: str):
+        super().setWindowTitle(title)
+        if hasattr(self, 'title_bar'):
+            self.title_bar.update_title(title)
+
+    def onThemeChange(self):
+        self.update_frameless_theme()
+        super().onThemeChange()
 
     def onLanguageChange(self):
         self.setWindowTitle(self.tr("Configuration Editor"))
         self.lbl_select.setText(self.tr("File to edit:"))
         self.btn_save.setText(self.tr("Save Changes"))
         self.btn_reload.setText(self.tr("Reload"))
-        
         self.combo_files.setItemText(0, self.tr("Theme Settings"))
         self.combo_files.setItemText(1, self.tr("Locales Settings"))
-        
         super().onLanguageChange()
-
-    def onThemeChange(self):
-        super().onThemeChange()

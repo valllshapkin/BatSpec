@@ -5,27 +5,25 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QDir, Qt
 
-from BatSpec.QtUp.TabInst import TabInstance
-from BatSpec.QtUp.Locales import Locales
-from BatSpec.QtUp.Themes import Themes
-from BatSpec.QtUp.Builder import build_node as b
+from W.PySide6.QtLocales import Locales
+from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.QtTabInst import TabInstance
+from W.PySide6.QtBuilder import build_node as b
 
 from .Logic import PROJECT_STATE
 
-class ProjectTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, PROJECT_STATE.Trigger, TabInstance):
+class ProjectTab(Locales.TranslateComponent, ComponentLifecycle, PROJECT_STATE.Trigger, TabInstance):
     def __init__(self, parent: QWidget | None = None, tab_widget: QTabWidget | None = None) -> None:
-        TabInstance.__init__(self, parent, tab_widget)
+        super().__init__(parent, tab_widget)
         
+    def __init_graph__(self):
         with b(self, QVBoxLayout()) as self.v:
             self.v.setContentsMargins(4, 0, 4, 0)
 
             with b(self.v, QLabel()) as self.vL: pass
 
-            with b(self.v, QPushButton()) as self.button_select_project:
-                self.button_select_project.clicked.connect(self.select_project)
-
-            with b(self.v, QPushButton()) as self.button_close_project:
-                self.button_close_project.clicked.connect(lambda: PROJECT_STATE.loadProject(None))
+            with b(self.v, QPushButton()) as self.button_select_project: pass
+            with b(self.v, QPushButton()) as self.button_close_project: pass
 
             with b(self.v, QStackedWidget()) as self.stacked_widget:
                 with b(self.stacked_widget, QLabel()) as self.message_label:
@@ -35,10 +33,14 @@ class ProjectTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, PR
                     self.model = QFileSystemModel()
                     self.model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
                     self.tree_view.setModel(self.model)
-                    self.tree_view.setColumnHidden(1, True)
-                    self.tree_view.setColumnHidden(2, True)
-                    self.tree_view.setColumnHidden(3, True)
+                    for i in range(1, 4):
+                        self.tree_view.setColumnHidden(i, True)
 
+    def __init_signal__(self):
+        self.button_select_project.clicked.connect(self.select_project)
+        self.button_close_project.clicked.connect(lambda: PROJECT_STATE.loadProject(None))
+
+    def __init_ready__(self):
         self.view_model_callback()
 
     def onProjectNewLoaded(self):
@@ -52,6 +54,8 @@ class ProjectTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, PR
             self.vL.setText(str(PROJECT_STATE.currentProject.folder_root))
 
     def view_model_callback(self):
+        if not hasattr(self, 'stacked_widget'): return
+        
         if PROJECT_STATE.currentProject is None:
             self.stacked_widget.setCurrentIndex(0)
         else:
@@ -65,9 +69,7 @@ class ProjectTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, PR
     def select_project(self):
         folder = QFileDialog.getExistingDirectory(self, self.tr("Select Folder"))
         if not folder: return
-        
-        folder = Path(folder)
-        PROJECT_STATE.loadProject(folder)
+        PROJECT_STATE.loadProject(Path(folder))
 
     def onLanguageChange(self):
         self.button_select_project.setText(self.tr("Load Project"))
@@ -76,6 +78,3 @@ class ProjectTab(Locales.TranslateComponent, Locales.Trigger, Themes.Trigger, PR
         if self.tab_widget:
             self.setTabName(self.tr("Project"))
         super().onLanguageChange()
-
-    def onThemeChange(self):
-        super().onThemeChange()
