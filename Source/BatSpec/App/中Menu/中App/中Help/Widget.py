@@ -2,10 +2,10 @@ from pathlib import Path
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 from PySide6.QtCore import Qt
 
-from W.PySide6.QtLocales import Locales
-from W.PySide6.QtSсheme import ComponentLifecycle
-from W.PySide6.QtBuilder import build_node as b
-from W.PySide6.QtFrameless import FramelessMixin
+from W.PySide6.App.Locales import Locales
+from W.PySide6.Core.Lifecycle import ComponentLifecycle
+from W.PySide6.Core.Builder import build_node as b
+from W.PySide6.Widgets.Frameless import FramelessMixin
 
 ScriptDir = Path(__file__).parent
 ICON_PATH = ScriptDir.parent.parent.parent.parent / "__assets__" / "icon.png"

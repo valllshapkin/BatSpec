@@ -3,11 +3,11 @@ from PySide6.QtWidgets import (
     QLabel, QWidget, QVBoxLayout, QFormLayout, QGroupBox, 
     QCheckBox, QComboBox
 )
-from W.PySide6.QtBuilder import build_node as b
+from W.PySide6.Core.Builder import build_node as b
 from BatSpec.App.中Menu.中ThemeSettings.Logic import AppThemes
 
-from W.PySide6.QtLocales import Locales
-from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.App.Locales import Locales
+from W.PySide6.Core.Lifecycle import ComponentLifecycle
 
 class ThemeSettingsPanel(Locales.TranslateComponent, ComponentLifecycle, QWidget):
     def __init__(self, parent=None):

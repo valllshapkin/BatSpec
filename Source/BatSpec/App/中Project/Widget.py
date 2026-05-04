@@ -5,10 +5,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QDir, Qt
 
-from W.PySide6.QtLocales import Locales
-from W.PySide6.QtSсheme import ComponentLifecycle
-from W.PySide6.QtTabInst import TabInstance
-from W.PySide6.QtBuilder import build_node as b
+from W.PySide6.App.Locales import Locales
+from W.PySide6.Core.Lifecycle import ComponentLifecycle
+from W.PySide6.Widgets.TabInstance import TabInstance
+from W.PySide6.Core.Builder import build_node as b
 
 from .Logic import PROJECT_STATE
 

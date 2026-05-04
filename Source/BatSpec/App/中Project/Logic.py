@@ -1,5 +1,5 @@
 from PySide6.QtCore import QObject, Signal, QSettings
-from W.PySide6.QtSettings import Field
+from W.PySide6.Core.Settings import Field
 from pathlib import Path
 import logging
 
@@ -28,8 +28,6 @@ class ProjectState:
         projectNewLoaded = Signal()
         windowStorageChanged = Signal()
 
-    # ИСПРАВЛЕНИЕ: Класс должен наследоваться от QObject, чтобы магия сигналов
-    # из фабрики Field сработала корректно!
     class ProjectSettings(QObject):
         open_project, S_open_project = Field(default="", val_type=str, key="Project")
         

@@ -1,5 +1,5 @@
 from pathlib import Path
-from W.PySide6.QtThemes import Themes
+from W.PySide6.App.Themes import Themes
 
 ScriptDir = Path(__file__).parent
 

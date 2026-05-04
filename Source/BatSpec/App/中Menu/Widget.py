@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QMainWindow
 from BatSpec.App.中Menu.中App.Widget import AppMenu
-from W.PySide6.QtLocales import Locales
-from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.App.Locales import Locales
+from W.PySide6.Core.Lifecycle import ComponentLifecycle
 
 class AddMenu(Locales.TranslateComponent, ComponentLifecycle, QMainWindow):
     def __init__(self, *args, **kwargs):

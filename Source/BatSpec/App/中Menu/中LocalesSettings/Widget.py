@@ -3,11 +3,11 @@ from PySide6.QtWidgets import (
     QComboBox, QPushButton, QListWidget, QListWidgetItem, QDialog
 )
 from PySide6.QtCore import QLocale, QTimer, Qt
-from W.PySide6.QtBuilder import build_node as b
+from W.PySide6.Core.Builder import build_node as b
 from BatSpec.App.中Menu.中LocalesSettings.Logic import AppLocales
 
-from W.PySide6.QtLocales import Locales
-from W.PySide6.QtSсheme import ComponentLifecycle
+from W.PySide6.App.Locales import Locales
+from W.PySide6.Core.Lifecycle import ComponentLifecycle
 
 REVERT_TIMEOUT = 15
 

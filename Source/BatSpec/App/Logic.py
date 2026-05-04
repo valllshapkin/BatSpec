@@ -9,6 +9,10 @@ pg.setConfigOptions(useOpenGL=True, antialias=False)
 from BatSpec.App.中Menu.中ThemeSettings.Logic import AppThemes
 from BatSpec.App.中Menu.中LocalesSettings.Logic import AppLocales, SUPPORTED_LANGUAGES
 
+# --- ИСПРАВЛЕНИЕ: Этот импорт должен быть здесь, чтобы запустить код инициализации
+# в Logic.py модуля аннотаций ДО того, как любые виджеты попытаются импортировать модели.
+import BatSpec.App.中Annotation.Logic
+
 @contextlib.contextmanager
 def application():
     if app := QtWidgets.QApplication.instance():

@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QDialog
 
-from W.PySide6.QtLocales import Locales
-from W.PySide6.QtSсheme import ComponentLifecycle
-from W.PySide6.QtBuilder import build_node as b
-from W.PySide6.QtFrameless import FramelessMixin
+from W.PySide6.App.Locales import Locales
+from W.PySide6.Core.Lifecycle import ComponentLifecycle
+from W.PySide6.Core.Builder import build_node as b
+from W.PySide6.Widgets.Frameless import FramelessMixin
 
 from BatSpec.App.中Menu.中App.中Settings.中LocalesTab.Widget import LocalesSettingsTab
 from BatSpec.App.中Menu.中App.中Settings.中ThemesTab.Widget import ThemeSettingsTab
